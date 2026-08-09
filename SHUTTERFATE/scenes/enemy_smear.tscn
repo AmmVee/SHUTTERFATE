@@ -1,0 +1,18 @@
+[gd_scene load_steps=4 format=3 uid="uid://cenemy01"]
+
+[ext_resource type="Script" path="res://scripts/enemy_smear.gd" id="1_enemy"]
+[ext_resource type="Texture2D" uid="uid://6ksuy71caspu" path="res://assets/enemy_iso.png" id="2_enemy"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_enemy"]
+radius = 12.0
+
+[node name="EnemySmear" type="CharacterBody2D" groups=["enemies"]]
+script = ExtResource("1_enemy")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_enemy")
+offset = Vector2(0, -12)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -4)
+shape = SubResource("CircleShape2D_enemy")

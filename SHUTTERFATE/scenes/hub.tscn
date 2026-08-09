@@ -1,0 +1,282 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/hub.gd" id="1_hub"]
+[ext_resource type="Texture2D" path="res://assets/hub_floor.png" id="2_floor"]
+[ext_resource type="Texture2D" path="res://assets/hub_wall.png" id="3_wall"]
+[ext_resource type="Texture2D" path="res://assets/hub_table.png" id="4_table"]
+[ext_resource type="Texture2D" path="res://assets/hub_camera.png" id="5_camera"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall"]
+size = Vector2(48, 24)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_desk"]
+radius = 24.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_npc"]
+radius = 20.0
+
+[node name="Hub" type="Node2D"]
+y_sort_enabled = true
+script = ExtResource("1_hub")
+
+[node name="Floor" type="Node2D" parent="."]
+
+[node name="Tile00" type="Sprite2D" parent="Floor"]
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Tile01" type="Sprite2D" parent="Floor"]
+position = Vector2(32, 16)
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Tile02" type="Sprite2D" parent="Floor"]
+position = Vector2(64, 32)
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Tile03" type="Sprite2D" parent="Floor"]
+position = Vector2(96, 48)
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Tile10" type="Sprite2D" parent="Floor"]
+position = Vector2(-32, 16)
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Tile11" type="Sprite2D" parent="Floor"]
+position = Vector2(0, 32)
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Tile12" type="Sprite2D" parent="Floor"]
+position = Vector2(32, 48)
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Tile13" type="Sprite2D" parent="Floor"]
+position = Vector2(64, 64)
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Tile20" type="Sprite2D" parent="Floor"]
+position = Vector2(-64, 32)
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Tile21" type="Sprite2D" parent="Floor"]
+position = Vector2(-32, 48)
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Tile22" type="Sprite2D" parent="Floor"]
+position = Vector2(0, 64)
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Tile23" type="Sprite2D" parent="Floor"]
+position = Vector2(32, 80)
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Tile30" type="Sprite2D" parent="Floor"]
+position = Vector2(-96, 48)
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Tile31" type="Sprite2D" parent="Floor"]
+position = Vector2(-64, 64)
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Tile32" type="Sprite2D" parent="Floor"]
+position = Vector2(-32, 80)
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Tile33" type="Sprite2D" parent="Floor"]
+position = Vector2(0, 96)
+z_index = -100
+texture = ExtResource("2_floor")
+
+[node name="Walls" type="Node2D" parent="."]
+
+[node name="Wall1" type="StaticBody2D" parent="Walls"]
+position = Vector2(-96, -16)
+z_index = -50
+
+[node name="Sprite2D" type="Sprite2D" parent="Walls/Wall1"]
+texture = ExtResource("3_wall")
+offset = Vector2(0, -32)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Wall1"]
+position = Vector2(0, -8)
+shape = SubResource("RectangleShape2D_wall")
+
+[node name="Wall2" type="StaticBody2D" parent="Walls"]
+position = Vector2(-32, -16)
+z_index = -50
+
+[node name="Sprite2D" type="Sprite2D" parent="Walls/Wall2"]
+texture = ExtResource("3_wall")
+offset = Vector2(0, -32)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Wall2"]
+position = Vector2(0, -8)
+shape = SubResource("RectangleShape2D_wall")
+
+[node name="Wall3" type="StaticBody2D" parent="Walls"]
+position = Vector2(32, -16)
+z_index = -50
+
+[node name="Sprite2D" type="Sprite2D" parent="Walls/Wall3"]
+texture = ExtResource("3_wall")
+offset = Vector2(0, -32)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Wall3"]
+position = Vector2(0, -8)
+shape = SubResource("RectangleShape2D_wall")
+
+[node name="Wall4" type="StaticBody2D" parent="Walls"]
+position = Vector2(96, -16)
+z_index = -50
+
+[node name="Sprite2D" type="Sprite2D" parent="Walls/Wall4"]
+texture = ExtResource("3_wall")
+offset = Vector2(0, -32)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Wall4"]
+position = Vector2(0, -8)
+shape = SubResource("RectangleShape2D_wall")
+
+[node name="Wall5" type="StaticBody2D" parent="Walls"]
+position = Vector2(-128, 0)
+z_index = -50
+
+[node name="Sprite2D" type="Sprite2D" parent="Walls/Wall5"]
+texture = ExtResource("3_wall")
+offset = Vector2(0, -32)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Wall5"]
+position = Vector2(0, -8)
+shape = SubResource("RectangleShape2D_wall")
+
+[node name="Wall6" type="StaticBody2D" parent="Walls"]
+position = Vector2(128, 0)
+z_index = -50
+
+[node name="Sprite2D" type="Sprite2D" parent="Walls/Wall6"]
+texture = ExtResource("3_wall")
+offset = Vector2(0, -32)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Wall6"]
+position = Vector2(0, -8)
+shape = SubResource("RectangleShape2D_wall")
+
+[node name="Wall7" type="StaticBody2D" parent="Walls"]
+position = Vector2(-160, 16)
+z_index = -50
+
+[node name="Sprite2D" type="Sprite2D" parent="Walls/Wall7"]
+texture = ExtResource("3_wall")
+offset = Vector2(0, -32)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Wall7"]
+position = Vector2(0, -8)
+shape = SubResource("RectangleShape2D_wall")
+
+[node name="Wall8" type="StaticBody2D" parent="Walls"]
+position = Vector2(160, 16)
+z_index = -50
+
+[node name="Sprite2D" type="Sprite2D" parent="Walls/Wall8"]
+texture = ExtResource("3_wall")
+offset = Vector2(0, -32)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Wall8"]
+position = Vector2(0, -8)
+shape = SubResource("RectangleShape2D_wall")
+
+[node name="Desk" type="Sprite2D" parent="."]
+position = Vector2(0, 32)
+z_index = 30
+texture = ExtResource("4_table")
+offset = Vector2(0, -20)
+
+[node name="CameraDesk" type="Area2D" parent="."]
+position = Vector2(0, 32)
+
+[node name="Sprite2D" type="Sprite2D" parent="CameraDesk"]
+texture = ExtResource("5_camera")
+offset = Vector2(0, -28)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CameraDesk"]
+position = Vector2(0, -8)
+shape = SubResource("CircleShape2D_desk")
+
+[node name="NPC" type="Sprite2D" parent="."]
+position = Vector2(-64, 48)
+z_index = 40
+texture = ExtResource("5_camera")
+self_modulate = Color(0.8, 0.6, 0.9, 1)
+offset = Vector2(0, -12)
+
+[node name="NPCArea" type="Area2D" parent="."]
+position = Vector2(-64, 48)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="NPCArea"]
+position = Vector2(0, -4)
+shape = SubResource("CircleShape2D_npc")
+
+[node name="PlayerSpawn" type="Marker2D" parent="."]
+position = Vector2(64, 48)
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="PromptLabel" type="Label" parent="CanvasLayer"]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -150.0
+offset_top = -100.0
+offset_right = 150.0
+offset_bottom = -70.0
+grow_horizontal = 2
+grow_vertical = 0
+horizontal_alignment = 1
+vertical_alignment = 1
+theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+visible = false
+
+[node name="StatsLabel" type="Label" parent="CanvasLayer"]
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 200.0
+offset_bottom = 80.0
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+text = "Отпечатки: 0\nСмертей: 0\nУбийств: 0"
+
+[node name="TitleLabel" type="Label" parent="CanvasLayer"]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -200.0
+offset_top = 20.0
+offset_right = 200.0
+offset_bottom = 60.0
+grow_horizontal = 2
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 28
+theme_override_colors/font_color = Color(0.9, 0.85, 0.75, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.05, 0.0, 1)
+theme_override_constants/outline_size = 5
+text = "ТЁМНАЯ КОМНАТА"

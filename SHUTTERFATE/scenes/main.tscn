@@ -1,54 +1,32 @@
-[gd_scene load_steps=7 format=3 uid="uid://cmain001"]
+[gd_scene load_steps=5 format=3 uid="uid://b2kllwl6juoxs"]
 
-[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
-[ext_resource type="PackedScene" uid="uid://cplayer01" path="res://scenes/player.tscn" id="2_player"]
-[ext_resource type="PackedScene" uid="uid://cenemy01" path="res://scenes/enemy_smear.tscn" id="3_enemy"]
-[ext_resource type="PackedScene" uid="uid://cenemy02" path="res://scenes/enemy_grain.tscn" id="4_grain"]
-[ext_resource type="Shader" path="res://shaders/vintage_film.gdshader" id="5_shader"]
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_post"]
-shader = ExtResource("5_shader")
-shader_parameter/grain_amount = 0.06
-shader_parameter/chromatic_aberration = 1.5
-shader_parameter/vignette_intensity = 0.6
-shader_parameter/desaturation = 0.15
-shader_parameter/aberration_offset = 0.002
-shader_parameter/scanline_intensity = 0.03
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_y1mg5"]
+[ext_resource type="PackedScene" uid="uid://cplayer01" path="res://scenes/player.tscn" id="2_4jm1s"]
+[ext_resource type="PackedScene" uid="uid://cenemy01" path="res://scenes/enemy_smear.tscn" id="3_8h1mg"]
+[ext_resource type="PackedScene" uid="uid://cenemy02" path="res://scenes/enemy_grain.tscn" id="4_9i2nh"]
 
 [node name="Main" type="Node2D"]
 y_sort_enabled = true
-script = ExtResource("1_main")
-enemy_scene = ExtResource("3_enemy")
-enemy_grain_scene = ExtResource("4_grain")
+script = ExtResource("1_y1mg5")
+enemy_scene = ExtResource("3_8h1mg")
+enemy_grain_scene = ExtResource("4_9i2nh")
 
-[node name="Player" parent="." instance=ExtResource("2_player")]
+[node name="Player" parent="." instance=ExtResource("2_4jm1s")]
 
 [node name="FloorUI" type="CanvasLayer" parent="."]
-layer = 90
 
 [node name="FloorLabel" type="Label" parent="FloorUI"]
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -250.0
+offset_left = -200.0
 offset_top = 20.0
 offset_right = -20.0
-offset_bottom = 50.0
+offset_bottom = 60.0
 grow_horizontal = 0
-theme_override_colors/font_color = Color(0.9, 0.85, 0.7, 1)
+theme_override_colors/font_color = Color(0.9, 0.9, 0.8, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
-theme_override_font_sizes/font_size = 18
-text = "Этаж: 1 | Комната: 1"
+theme_override_font_sizes/font_size = 20
+text = "Floor 1"
 horizontal_alignment = 2
-
-[node name="PostProcess" type="CanvasLayer" parent="."]
-
-[node name="ColorRect" type="ColorRect" parent="PostProcess"]
-material = SubResource("ShaderMaterial_post")
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2

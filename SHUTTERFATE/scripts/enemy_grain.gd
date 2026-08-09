@@ -53,12 +53,7 @@ func _ready():
 func _physics_process(_delta):
 	if player == null:
 		return
-
-	# Fix z_index range
-	z_index = clamp(int(global_position.y), -4000, 4000)
-
 	var dist = global_position.distance_to(player.global_position)
-
 	if dist < 250:
 		var to_player = global_position.direction_to(player.global_position)
 		var perpendicular = Vector2(-to_player.y, to_player.x)
@@ -66,9 +61,7 @@ func _physics_process(_delta):
 		velocity = move_dir * move_speed
 	else:
 		velocity = move_dir * (move_speed * 0.5)
-
 	move_and_slide()
-
 	if dist < attack_range and can_attack:
 		attack()
 
@@ -83,11 +76,9 @@ func take_damage(amount: float):
 	if sprite:
 		sprite.modulate = Color(1, 0.3, 0.3)
 	flash_timer.start(0.1)
-
 	if player:
 		var knockback = global_position.direction_to(player.global_position) * -30
 		global_position += knockback
-
 	if hp <= 0:
 		die()
 

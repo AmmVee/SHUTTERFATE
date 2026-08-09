@@ -69,6 +69,9 @@ func _ready():
 	if flash_overlay:
 		flash_overlay.visible = false
 
+	max_film = FilmManager.get_max_frames()
+	current_film = max_film
+
 	update_ui()
 
 func _physics_process(delta):
@@ -97,10 +100,11 @@ func handle_aiming(delta):
 			aim_visual.visible = true
 
 		var enemies = get_enemies_in_aim()
+		var build_rate = FilmManager.get_focus_build_rate()
 		if enemies.size() > 0:
-			focus_time = min(focus_time + delta, max_focus_time)
+			focus_time = min(focus_time + delta * build_rate, max_focus_time)
 		else:
-			focus_time = max(focus_time - delta * 3.0, 0.0)
+			focus_time = max(focus_time - delta * 3.0 * build_rate, 0.0)
 	else:
 		is_aiming = false
 		if aim_area:
@@ -120,10 +124,16 @@ func take_photo():
 	var enemies = get_enemies_in_aim()
 
 	for enemy in enemies:
+		var was_alive = true
+		if "hp" in enemy:
+			was_alive = enemy.hp > 0
+
 		var dmg = calculate_damage(enemy)
 		enemy.take_damage(dmg)
-		print("Shot ", enemy.name, " for ", round(dmg), " dmg")
-		GameManager.add_kill()
+
+		if was_alive and "hp" in enemy and enemy.hp <= 0:
+			GameManager.add_kill()
+			print("Killed ", enemy.name)
 
 	if enemies.size() == 0:
 		print("Miss! No enemy in frame.")
@@ -140,7 +150,7 @@ func calculate_damage(enemy) -> float:
 		max_r = aim_shape.shape.radius
 
 	var comp = clamp(2.0 - (dist / max_r) * 1.5, 0.5, 2.0)
-	var focus = 0.2 + (focus_time / max_focus_time) * 2.8
+	var focus_ratio = focus_time / max_focus_time
 
 	var exposure: float
 	if shutter_speed >= 500:
@@ -164,7 +174,8 @@ func calculate_damage(enemy) -> float:
 
 	var aperture_mod = clamp(3.5 / aperture, 0.5, 2.5)
 
-	var dmg = base_damage * comp * focus * exposure * iso_mod * aperture_mod
+	var dmg = base_damage * comp
+	dmg = FilmManager.apply_damage_modifiers(dmg, focus_ratio, exposure, iso_mod, aperture_mod, current_film, max_film)
 	return max(dmg, 1.0)
 
 func get_enemies_in_aim() -> Array:
@@ -179,10 +190,12 @@ func get_enemies_in_aim() -> Array:
 
 func start_reload():
 	is_reloading = true
-	reload_timer.start(2.5)
-	print("Reloading...")
+	var reload_time = FilmManager.get_reload_time()
+	reload_timer.start(reload_time)
+	print("Reloading... (", reload_time, "s)")
 
 func _on_reload_timer_timeout():
+	max_film = FilmManager.get_max_frames()
 	current_film = max_film
 	is_reloading = false
 	print("Reloaded!")
@@ -229,4 +242,5 @@ func update_ui():
 			txt += " [RELOAD]"
 		film_label.text = txt
 	if params_label:
-		params_label.text = "f/%.1f | 1/%.0f | ISO %d | %.0fmm" % [aperture, shutter_speed, iso, focal_length]
+		var film_name = FilmManager.current_film.display_name if FilmManager.current_film else "None"
+		params_label.text = "f/%.1f | 1/%.0f | ISO %d | %.0fmm | %s" % [aperture, shutter_speed, iso, focal_length, film_name]

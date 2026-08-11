@@ -1,7 +1,7 @@
 extends Node2D
 
-@export var grid_width: int = 16
-@export var grid_height: int = 12
+@export var grid_width: int = 20
+@export var grid_height: int = 14
 @export var cell_size: Vector2 = Vector2(64, 32)
 
 var tile_w: float = 64.0
@@ -48,6 +48,36 @@ func get_random_floor_position(margin: int = 2) -> Vector2:
 	var x = randi_range(margin, grid_width - 1 - margin)
 	var y = randi_range(margin, grid_height - 1 - margin)
 	return iso_to_screen(x, y) + Vector2(offset_x, offset_y)
+
+# NEW: Get the exact local position of a door gap on the room wall
+func get_door_local_position(direction: String) -> Vector2:
+	var offset_x = -(grid_width * tile_w * 0.5)
+	var offset_y = -(grid_height * tile_h * 0.5)
+	var half_w = float(grid_width) / 2.0
+	var half_h = float(grid_height) / 2.0
+
+	match direction:
+		"north":
+			# Top edge, center (y=0, x=half_w)
+			var dx = int(half_w)
+			return iso_to_screen(dx, 0) + Vector2(offset_x, offset_y - tile_h * 0.5)
+		"south":
+			# Bottom edge, center (y=grid_height-1, x=half_w)
+			var dx = int(half_w)
+			return iso_to_screen(dx, grid_height - 1) + Vector2(offset_x, offset_y - tile_h * 0.5)
+		"west":
+			# Left edge, center (x=0, y=half_h)
+			var dy = int(half_h)
+			return iso_to_screen(0, dy) + Vector2(offset_x, offset_y - tile_h * 0.5)
+		"east":
+			# Right edge, center (x=grid_width-1, y=half_h)
+			var dy = int(half_h)
+			return iso_to_screen(grid_width - 1, dy) + Vector2(offset_x, offset_y - tile_h * 0.5)
+	return Vector2.ZERO
+
+# NEW: Get global position of the door
+func get_door_global_position(direction: String) -> Vector2:
+	return global_position + get_door_local_position(direction)
 
 func generate_room():
 	var offset_x = -(grid_width * tile_w * 0.5)

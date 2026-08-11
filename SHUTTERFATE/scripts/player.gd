@@ -2,10 +2,10 @@ extends CharacterBody2D
 
 signal died
 
-@export var move_speed: float = 180.0
+@export var move_speed: float = 170.0
 @export var aim_slowdown: float = 0.35
-@export var max_hp: int = 100
-@export var base_damage: float = 12.0
+@export var max_hp: int = 80
+@export var base_damage: float = 10.0
 
 var hp: int = max_hp
 var is_aiming: bool = false
@@ -34,6 +34,20 @@ var params_label: Label
 
 func _ready():
 	add_to_group("player")
+
+	# Relic: Lens Cap (+15 HP)
+	var hp_bonus = RelicManager.get_max_hp_bonus()
+	# Camera level + upgrade HP bonus
+	max_hp += GameManager.get_camera_bonus_hp()
+	max_hp += hp_bonus
+	hp = max_hp
+
+	# Upgrade: speed bonus
+	move_speed *= GameManager.get_upgrade_bonus_speed()
+
+	# Relic: Camera Obscura (see all enemies)
+	if RelicManager.has_see_all():
+		_show_all_enemies()
 
 	aim_area = get_node_or_null("AimArea")
 	if aim_area:
@@ -86,7 +100,11 @@ func handle_movement():
 	var input = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	var iso_x = input.x
 	var iso_y = input.y
-	var spd = move_speed * (aim_slowdown if is_aiming else 1.0)
+	var slow = aim_slowdown
+	# Relic: Old Tripod (no aim slowdown)
+	if RelicManager.has_no_aim_slow():
+		slow = 1.0
+	var spd = move_speed * (slow if is_aiming else 1.0)
 	velocity.x = (iso_x - iso_y) * spd
 	velocity.y = (iso_x + iso_y) * spd * 0.5
 	move_and_slide()
@@ -98,6 +116,10 @@ func handle_aiming(delta):
 			aim_area.monitoring = true
 		if aim_visual:
 			aim_visual.visible = true
+
+		# Relic: Eyeglass (slow time 20%)
+		if RelicManager.has_effect("slow_time_20"):
+			Engine.time_scale = RelicManager.get_time_scale()
 
 		var enemies = get_enemies_in_aim()
 		var build_rate = FilmManager.get_focus_build_rate()
@@ -112,6 +134,9 @@ func handle_aiming(delta):
 		if aim_visual:
 			aim_visual.visible = false
 		focus_time = max(focus_time - delta * 4.0, 0.0)
+		# Reset time scale
+		if RelicManager.has_effect("slow_time_20"):
+			Engine.time_scale = 1.0
 
 func handle_shooting():
 	if is_reloading or current_film <= 0:
@@ -120,8 +145,22 @@ func handle_shooting():
 		take_photo()
 
 func take_photo():
-	current_film -= 1
+	var dev_menu = get_tree().get_first_node_in_group("main")
+	if dev_menu:
+		dev_menu = dev_menu.get_node_or_null("DevMenu")
+
+	if dev_menu and dev_menu.infinite_film:
+		pass  # Don't consume film
+	else:
+		current_film -= 1
+
+	RelicManager.on_shot()
 	var enemies = get_enemies_in_aim()
+	var kills_this_shot = 0
+
+	# Relic: Wet Print (AOE every 10th shot)
+	if RelicManager.is_aoe_shot():
+		_aoe_damage()
 
 	for enemy in enemies:
 		var was_alive = true
@@ -131,9 +170,20 @@ func take_photo():
 		var dmg = calculate_damage(enemy)
 		enemy.take_damage(dmg)
 
+		# Relic: Double Exposure (second hit ×0.5)
+		if RelicManager.has_double_shot():
+			enemy.take_damage(dmg * 0.35)
+
 		if was_alive and "hp" in enemy and enemy.hp <= 0:
 			GameManager.add_kill()
+			kills_this_shot += 1
 			print("Killed ", enemy.name)
+
+	# Polaroid: heal on kill
+	if kills_this_shot > 0 and FilmManager.should_heal_on_kill():
+		var heal = FilmManager.get_heal_amount() * kills_this_shot
+		hp = min(hp + heal, max_hp)
+		print("Polaroid heal: +", heal, " HP")
 
 	if enemies.size() == 0:
 		print("Miss! No enemy in frame.")
@@ -146,8 +196,13 @@ func take_photo():
 func calculate_damage(enemy) -> float:
 	var dist = global_position.distance_to(enemy.global_position)
 	var max_r = 160.0
+	# Relic: Remote Trigger (+50% aim range)
+	# Upgrade: range bonus
+	var range_mult = RelicManager.get_aim_range_multiplier() * GameManager.get_upgrade_bonus_range()
 	if aim_shape and aim_shape.shape:
-		max_r = aim_shape.shape.radius
+		max_r = aim_shape.shape.radius * range_mult
+	else:
+		max_r = 160.0 * range_mult
 
 	var comp = clamp(2.0 - (dist / max_r) * 1.5, 0.5, 2.0)
 	var focus_ratio = focus_time / max_focus_time
@@ -167,15 +222,35 @@ func calculate_damage(enemy) -> float:
 		exposure = 1.0
 
 	var iso_mod = 1.0 + (iso - 100) / 2000.0
-	if iso > 1600:
-		iso_mod *= randf_range(0.6, 1.4)
-	elif iso > 800:
-		iso_mod *= randf_range(0.8, 1.2)
+	# Relic: Pocket Reflector (ISO gives damage, no noise penalty)
+	if RelicManager.has_iso_no_noise():
+		iso_mod = 1.0 + min((iso - 100) / 1000.0, 0.5)
+	else:
+		if iso > 1600:
+			iso_mod *= randf_range(0.6, 1.4)
+		elif iso > 800:
+			iso_mod *= randf_range(0.8, 1.2)
 
 	var aperture_mod = clamp(3.5 / aperture, 0.5, 2.5)
 
 	var dmg = base_damage * comp
-	dmg = FilmManager.apply_damage_modifiers(dmg, focus_ratio, exposure, iso_mod, aperture_mod, current_film, max_film)
+	# Camera level bonus
+	dmg *= GameManager.get_camera_bonus_damage()
+	# Use new per-enemy damage calculation for film-specific effects
+	dmg = FilmManager.calculate_damage_for_enemy(dmg, focus_ratio, exposure, iso_mod, aperture_mod, current_film, enemy)
+
+	# Dev: One-Shot
+	var dev_menu = get_tree().get_first_node_in_group("main")
+	if dev_menu:
+		dev_menu = dev_menu.get_node_or_null("DevMenu")
+	if dev_menu and dev_menu.one_shot:
+		dmg = 99999
+
+	# Relic: Fingerprint (+20% crit at full focus)
+	if focus_ratio >= 0.99 and randf() < RelicManager.get_crit_bonus():
+		dmg *= 2.0
+		print("RELIC CRIT!")
+
 	return max(dmg, 1.0)
 
 func get_enemies_in_aim() -> Array:
@@ -189,23 +264,62 @@ func get_enemies_in_aim() -> Array:
 	return enemies
 
 func start_reload():
+	RelicManager.on_reload()
+	# Relic: Empty Cassette (every 5th reload is free & instant)
+	if RelicManager.is_free_reload():
+		print("Empty Cassette: FREE RELOAD!")
+		max_film = FilmManager.get_max_frames() + RelicManager.get_extra_frames()
+		current_film = max_film
+		is_reloading = false
+		print("Reloaded instantly!")
+		return
+
 	is_reloading = true
-	var reload_time = FilmManager.get_reload_time()
+	var reload_time = FilmManager.get_reload_time() * RelicManager.get_reload_multiplier() * GameManager.get_upgrade_bonus_reload()
 	reload_timer.start(reload_time)
 	print("Reloading... (", reload_time, "s)")
 
 func _on_reload_timer_timeout():
-	max_film = FilmManager.get_max_frames()
+	max_film = FilmManager.get_max_frames() + RelicManager.get_extra_frames() + GameManager.get_upgrade_bonus_frames()
 	current_film = max_film
 	is_reloading = false
 	print("Reloaded!")
 
 func take_damage(amount: int):
+	# Dev: God Mode
+	var dev_menu = get_tree().get_first_node_in_group("main")
+	if dev_menu:
+		dev_menu = dev_menu.get_node_or_null("DevMenu")
+	if dev_menu and dev_menu.god_mode:
+		return
+
+	# Relic: Broken UV Filter (first hit = 0)
+	if RelicManager.on_first_hit():
+		print("UV Filter absorbed the hit!")
+		flash_screen()
+		return
+
+	# Relic: Film from Future (death cheat once per run)
+	if hp - amount <= 0:
+		if RelicManager.use_death_cheat():
+			hp = 1
+			print("Film from Future saved you! 1 HP remaining.")
+			flash_screen()
+			return
+
 	hp -= amount
 	if hp <= 0:
 		die()
 
 func die():
+	# Relic: Mirror Shard (death shot)
+	if RelicManager.use_death_shot():
+		var nearest = _get_nearest_enemy()
+		if nearest:
+			nearest.take_damage(base_damage * 5.0)
+			print("Mirror Shard final shot!")
+		flash_screen()
+
 	print("GAME OVER")
 	died.emit()
 	GameManager.end_run(false)
@@ -230,6 +344,32 @@ func handle_camera_settings():
 		iso = 100 if iso != 100 else 3200
 	elif Input.is_action_just_pressed("ui_5"):
 		aperture = 1.4 if aperture != 1.4 else 16.0
+
+func _aoe_damage():
+	var all_enemies = get_tree().get_nodes_in_group("enemies")
+	for enemy in all_enemies:
+		if is_instance_valid(enemy) and "take_damage" in enemy:
+			enemy.take_damage(base_damage * 1.5)
+	print("Wet Print AOE!")
+
+func _get_nearest_enemy() -> Node2D:
+	var enemies = get_tree().get_nodes_in_group("enemies")
+	var nearest = null
+	var min_dist = 99999.0
+	for e in enemies:
+		if is_instance_valid(e):
+			var d = global_position.distance_to(e.global_position)
+			if d < min_dist:
+				min_dist = d
+				nearest = e
+	return nearest
+
+func _show_all_enemies():
+	var enemies = get_tree().get_nodes_in_group("enemies")
+	for e in enemies:
+		if is_instance_valid(e) and e.has_method("_update_hidden_visibility"):
+			e._update_hidden_visibility()
+	print("Camera Obscura: all enemies revealed")
 
 func update_ui():
 	if hp_bar:

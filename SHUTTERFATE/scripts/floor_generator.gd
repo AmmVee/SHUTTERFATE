@@ -95,18 +95,28 @@ func create_corridors():
 		var connections = floor_map[pos]["connections"]
 		for dir_name in connections.keys():
 			var target = connections[dir_name]
+			# Рисуем коридор только один раз (от меньшей к большей координате)
 			if pos.x < target.x or (pos.x == target.x and pos.y < target.y):
-				_draw_corridor(pos, target)
+				_draw_corridor(pos, target, dir_name)
 
-func _draw_corridor(a: Vector2i, b: Vector2i):
-	var center_a = get_room_center(a)
-	var center_b = get_room_center(b)
-	var dist = center_a.distance_to(center_b)
-	var steps = max(int(dist / 60), 6)
+func _draw_corridor(a: Vector2i, b: Vector2i, dir_from_a: String):
+	# Определяем обратное направление (от b к a)
+	var dir_from_b: String
+	match dir_from_a:
+		"north": dir_from_b = "south"
+		"south": dir_from_b = "north"
+		"east":  dir_from_b = "west"
+		"west":  dir_from_b = "east"
+
+	var door_a = get_room_door_global_position(a, dir_from_a)
+	var door_b = get_room_door_global_position(b, dir_from_b)
+
+	var dist = door_a.distance_to(door_b)
+	var steps = max(int(dist / 50), 8)
 
 	for i in range(1, steps):
 		var t = float(i) / float(steps)
-		var pos = center_a.lerp(center_b, t)
+		var pos = door_a.lerp(door_b, t)
 		var tile = Sprite2D.new()
 		tile.texture = load("res://assets/floor_iso.png")
 		tile.position = pos
@@ -114,6 +124,13 @@ func _draw_corridor(a: Vector2i, b: Vector2i):
 		tile.modulate = Color(0.6, 0.6, 0.7, 0.25)
 		tile.scale = Vector2(0.8, 0.8)
 		add_child(tile)
+
+func get_room_door_global_position(room_pos: Vector2i, direction: String) -> Vector2:
+	var room = get_room(room_pos)
+	if room and room.has_method("get_door_global_position"):
+		return room.get_door_global_position(direction)
+	# Fallback
+	return get_room_center(room_pos)
 
 func _get_free_neighbors(pos: Vector2i) -> Array:
 	var dirs = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]

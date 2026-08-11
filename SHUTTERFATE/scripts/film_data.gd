@@ -13,3 +13,5 @@ class_name FilmData
 @export var focus_build_rate: float = 1.0
 @export var reload_time: float = 2.5
 @export var special_id: String = ""
+@export var rarity: String = "white"  # white, green, blue, purple, yellow, red, gold
+@export var rarity_color: Color = Color.WHITE

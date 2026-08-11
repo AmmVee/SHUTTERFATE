@@ -10,6 +10,7 @@ var door_nodes: Array = []
 var exit_node: Area2D = null
 var camera: Camera2D = null
 var player: Node2D = null
+var teleport_cooldown: float = 0.0
 
 func _ready():
 	player = get_node_or_null("Player")
@@ -32,6 +33,25 @@ func _ready():
 		GameManager.current_floor = 1
 
 	generate_floor()
+
+	# Dev menu
+	var dev_menu = load("res://scripts/dev_menu.gd")
+	if dev_menu:
+		var dm = CanvasLayer.new()
+		dm.set_script(dev_menu)
+		dm.name = "DevMenu"
+		add_child(dm)
+		print("Dev menu loaded (F1)")
+
+	# Pause menu
+	var pause_menu = load("res://scripts/pause_menu.gd")
+	if pause_menu:
+		var pm = CanvasLayer.new()
+		pm.set_script(pause_menu)
+		pm.name = "PauseMenu"
+		pm.process_mode = Node.PROCESS_MODE_ALWAYS  # Works while paused
+		add_child(pm)
+		print("Pause menu loaded (ESC)")
 
 func generate_floor():
 	if floor_gen != null and is_instance_valid(floor_gen):
@@ -93,10 +113,10 @@ func enter_current_room():
 	elif room_type == "boss":
 		spawn_boss_room(room)
 	else:
-		var enemy_count = 2 + GameManager.current_floor
+		var enemy_count = 3 + int(GameManager.current_floor * 1.5)
 		if room_type == "elite":
-			enemy_count += 2
-		enemy_count = min(enemy_count, 12)
+			enemy_count += 3
+		enemy_count = min(enemy_count, 15)
 		print("Spawning ", enemy_count, " enemies")
 		for i in range(enemy_count):
 			spawn_enemy_in_room(room)
@@ -138,10 +158,88 @@ func spawn_enemy_in_room(room):
 	enemies_alive += 1
 	enemy.tree_exited.connect(_on_enemy_died)
 
+func spawn_treasure_room(room):
+	print("TREASURE ROOM")
+	if room == null:
+		return
+	var chest = Area2D.new()
+	chest.set_script(load("res://scripts/treasure_chest.gd"))
+	# Place chest near center but on valid floor
+	var chest_pos = room.global_position + room.get_center()
+	if room.has_method("is_position_inside_floor") and not room.is_position_inside_floor(chest_pos):
+		chest_pos = room.global_position + room.get_random_floor_position(3)
+	chest.global_position = chest_pos
+
+	# Sprite
+	var sprite = Sprite2D.new()
+	sprite.name = "Sprite2D"
+	sprite.texture = load("res://assets/floor_iso.png")
+	sprite.modulate = Color(1.0, 0.85, 0.2, 1.0)  # Gold
+	sprite.scale = Vector2(1.2, 1.2)
+	chest.add_child(sprite)
+
+	# Collision
+	var coll = CollisionShape2D.new()
+	coll.shape = RectangleShape2D.new()
+	coll.shape.size = Vector2(50, 50)
+	chest.add_child(coll)
+
+	# Label
+	var label = Label.new()
+	label.name = "Label"
+	label.text = "[E] Открыть"
+	label.position = Vector2(-40, -50)
+	label.add_theme_font_size_override("font_size", 12)
+	label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3, 1))
+	label.add_theme_constant_override("outline_size", 2)
+	chest.add_child(label)
+
+	add_child(chest)
+	print("Chest spawned at: ", chest.global_position)
+
 func spawn_boss_room(room):
 	print("BOSS ROOM")
-	for i in range(3):
+	# Spawn boss
+	_spawn_boss(room)
+	# Spawn 2-4 minions
+	for i in range(2 + randi() % 3):
 		spawn_enemy_in_room(room)
+
+func _spawn_boss(room):
+	if room == null:
+		return
+	var spawn_pos = room.global_position + room.get_center()
+	if room.has_method("is_position_inside_floor") and not room.is_position_inside_floor(spawn_pos):
+		spawn_pos = room.global_position + room.get_random_floor_position(3)
+
+	var boss = load("res://scripts/boss_portraitist.gd")
+	if boss == null:
+		print("ERROR: boss_portraitist.gd not found!")
+		return
+
+	var boss_node = CharacterBody2D.new()
+	boss_node.set_script(boss)
+	boss_node.global_position = spawn_pos
+
+	# Add sprite
+	var sprite = Sprite2D.new()
+	sprite.name = "Sprite2D"
+	sprite.texture = load("res://assets/enemy_iso.png")
+	sprite.modulate = Color(0.9, 0.4, 0.4, 1.0)
+	sprite.scale = Vector2(1.8, 1.8)
+	boss_node.add_child(sprite)
+
+	# Add collision
+	var coll = CollisionShape2D.new()
+	coll.shape = RectangleShape2D.new()
+	coll.shape.size = Vector2(40, 40)
+	boss_node.add_child(coll)
+
+	add_child(boss_node)
+	current_room_enemies.append(boss_node)
+	enemies_alive += 1
+	boss_node.tree_exited.connect(_on_enemy_died)
+	print("PORTRAITIST SPAWNED!")
 
 func _on_enemy_died():
 	enemies_alive = max(enemies_alive - 1, 0)
@@ -151,6 +249,10 @@ func _on_enemy_died():
 		room_data["cleared"] = true
 
 func unlock_doors():
+	# Room clear bonus
+	GameManager.photo_prints += 10
+	print("Room cleared! +10 prints")
+
 	for d in door_nodes:
 		if is_instance_valid(d):
 			d.set_meta("locked", false)
@@ -176,29 +278,22 @@ func create_transition_door(room, direction: String, target_pos: Vector2i):
 	var door = Area2D.new()
 	door.name = "Door_%s" % direction
 	door.set_meta("target_pos", target_pos)
+	door.set_meta("direction", direction)
 	door.set_meta("locked", true)
 
 	var door_pos: Vector2
-	if room.has_method("get_center"):
-		var center = room.get_center()
-		var off_x = 520.0
-		var off_y = 280.0
-		if "grid_width" in room and "tile_w" in room:
-			off_x = room.grid_width * room.tile_w * 0.58
-		if "grid_height" in room and "tile_h" in room:
-			off_y = room.grid_height * room.tile_h * 0.58
-
-		match direction:
-			"north": door_pos = room.global_position + center + Vector2(0, -off_y)
-			"south": door_pos = room.global_position + center + Vector2(0, off_y)
-			"west":  door_pos = room.global_position + center + Vector2(-off_x, 0)
-			"east":  door_pos = room.global_position + center + Vector2(off_x, 0)
+	if room.has_method("get_door_global_position"):
+		door_pos = room.get_door_global_position(direction)
 	else:
+		# Fallback
+		var center = room.global_position
+		if room.has_method("get_center"):
+			center += room.get_center()
 		match direction:
-			"north": door_pos = room.global_position + Vector2(0, -400)
-			"south": door_pos = room.global_position + Vector2(0, 400)
-			"west":  door_pos = room.global_position + Vector2(-600, 0)
-			"east":  door_pos = room.global_position + Vector2(600, 0)
+			"north": door_pos = center + Vector2(0, -280)
+			"south": door_pos = center + Vector2(0, 280)
+			"west":  door_pos = center + Vector2(-520, 0)
+			"east":  door_pos = center + Vector2(520, 0)
 
 	door.position = door_pos
 
@@ -279,6 +374,8 @@ func create_exit(room):
 func _on_door_entered(body, door: Area2D):
 	if not body.is_in_group("player"):
 		return
+	if teleport_cooldown > 0:
+		return
 	if door.get_meta("locked", true):
 		var label = door.get_node_or_null("DoorLabel")
 		if label:
@@ -286,13 +383,37 @@ func _on_door_entered(body, door: Area2D):
 			label.add_theme_color_override("font_color", Color(1, 0.3, 0.3, 1))
 		return
 	var target = door.get_meta("target_pos", Vector2i.ZERO)
-	print("Entering door to: ", target)
-	call_deferred("move_to_room", target)
+	var direction = door.get_meta("direction", "")
+	print("Entering door to: ", target, " via ", direction)
+	call_deferred("move_to_room", target, direction)
 
-func move_to_room(target_pos: Vector2i):
+func move_to_room(target_pos: Vector2i, from_direction: String = ""):
 	if floor_gen and floor_gen.move_to_room(target_pos):
 		if player:
-			player.global_position = floor_gen.get_room_center(target_pos)
+			var enter_direction = ""
+			match from_direction:
+				"north": enter_direction = "south"
+				"south": enter_direction = "north"
+				"east":  enter_direction = "west"
+				"west":  enter_direction = "east"
+
+			var spawn_pos = Vector2.ZERO
+			var current_room = floor_gen.get_current_room()
+			if enter_direction != "" and current_room and current_room.has_method("get_door_global_position"):
+				spawn_pos = current_room.get_door_global_position(enter_direction)
+				# Сдвигаем внутрь комнаты подальше от двери, чтобы не активировать триггер сразу
+				var offset = Vector2.ZERO
+				match enter_direction:
+					"north": offset = Vector2(0, 90)
+					"south": offset = Vector2(0, -90)
+					"west":  offset = Vector2(90, 0)
+					"east":  offset = Vector2(-90, 0)
+				spawn_pos += offset
+			else:
+				spawn_pos = floor_gen.get_room_center(target_pos)
+
+			player.global_position = spawn_pos
+			teleport_cooldown = 0.6
 			print("Moved to: ", player.global_position)
 		enter_current_room()
 		update_floor_ui()
@@ -314,6 +435,15 @@ func next_floor():
 	print("=== NEW FLOOR: ", GameManager.current_floor, " ===")
 	generate_floor()
 
+func _find_room_of_type(room_type: String) -> Vector2i:
+	if floor_gen == null or not floor_gen.has_method("get_current_room_data"):
+		return Vector2i.ZERO
+	for pos in floor_gen.floor_map.keys():
+		var data = floor_gen.floor_map[pos]
+		if data.get("type", "") == room_type:
+			return pos
+	return Vector2i.ZERO
+
 func update_floor_ui():
 	var ui = get_node_or_null("FloorUI")
 	if ui:
@@ -325,7 +455,9 @@ func update_floor_ui():
 			var type_str = type_names.get(room_type, "Бой")
 			label.text = "Этаж: %d | %s" % [GameManager.current_floor, type_str]
 
-func _physics_process(_delta):
+func _physics_process(delta):
+	if teleport_cooldown > 0:
+		teleport_cooldown = max(teleport_cooldown - delta, 0.0)
 	if player and camera:
 		camera.global_position = player.global_position
 	if player and player.global_position.distance_to(Vector2.ZERO) > 15000:

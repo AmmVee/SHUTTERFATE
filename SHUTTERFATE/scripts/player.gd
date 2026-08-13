@@ -21,6 +21,11 @@ var focal_length: float = 50.0
 var max_film: int = 36
 var current_film: int = 36
 
+# Blind mechanic
+var is_blinded: bool = false
+var blind_timer: float = 0.0
+var blind_overlay: ColorRect = null
+
 var aim_area: Area2D
 var aim_shape: CollisionShape2D
 var reload_timer: Timer
@@ -35,17 +40,13 @@ var params_label: Label
 func _ready():
 	add_to_group("player")
 
-	# Relic: Lens Cap (+15 HP)
 	var hp_bonus = RelicManager.get_max_hp_bonus()
-	# Camera level + upgrade HP bonus
 	max_hp += GameManager.get_camera_bonus_hp()
 	max_hp += hp_bonus
 	hp = max_hp
 
-	# Upgrade: speed bonus
 	move_speed *= GameManager.get_upgrade_bonus_speed()
 
-	# Relic: Camera Obscura (see all enemies)
 	if RelicManager.has_see_all():
 		_show_all_enemies()
 
@@ -65,7 +66,7 @@ func _ready():
 		reload_timer.name = "ReloadTimer"
 		reload_timer.one_shot = true
 		add_child(reload_timer)
-	reload_timer.timeout.connect(_on_reload_timer_timeout)
+		reload_timer.timeout.connect(_on_reload_timer_timeout)
 
 	var canvas = get_node_or_null("CanvasLayer")
 	if canvas:
@@ -78,6 +79,16 @@ func _ready():
 			film_label = ui.get_node_or_null("FilmLabel")
 			params_label = ui.get_node_or_null("ParamsLabel")
 
+		# Blind overlay
+		blind_overlay = ColorRect.new()
+		blind_overlay.name = "BlindOverlay"
+		blind_overlay.color = Color(1.0, 1.0, 1.0, 0.0)
+		blind_overlay.size = Vector2(1920, 1080)
+		blind_overlay.position = Vector2(-960, -540)
+		blind_overlay.z_index = 200
+		blind_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		canvas.add_child(blind_overlay)
+
 	if aim_visual:
 		aim_visual.visible = false
 	if flash_overlay:
@@ -89,6 +100,7 @@ func _ready():
 	update_ui()
 
 func _physics_process(delta):
+	_update_blind(delta)
 	handle_movement()
 	handle_aiming(delta)
 	handle_shooting()
@@ -96,12 +108,30 @@ func _physics_process(delta):
 	update_ui()
 	z_index = int(global_position.y)
 
+func _update_blind(delta):
+	if blind_timer > 0:
+		blind_timer = max(blind_timer - delta, 0.0)
+		if blind_timer <= 0:
+			is_blinded = false
+			if blind_overlay:
+				blind_overlay.color.a = 0.0
+			print("Blindness faded")
+
+func apply_blind(duration: float):
+	is_blinded = true
+	blind_timer = duration
+	if blind_overlay:
+		# Flash white first
+		blind_overlay.color = Color(1.0, 1.0, 1.0, 1.0)
+		var tween = get_tree().create_tween()
+		tween.tween_property(blind_overlay, "color", Color(0.1, 0.1, 0.1, 0.85), 0.3)
+	print("PLAYER BLINDED for ", duration, " sec!")
+
 func handle_movement():
 	var input = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	var iso_x = input.x
 	var iso_y = input.y
 	var slow = aim_slowdown
-	# Relic: Old Tripod (no aim slowdown)
 	if RelicManager.has_no_aim_slow():
 		slow = 1.0
 	var spd = move_speed * (slow if is_aiming else 1.0)
@@ -110,6 +140,18 @@ func handle_movement():
 	move_and_slide()
 
 func handle_aiming(delta):
+	if is_blinded:
+		# Can't aim while blinded
+		is_aiming = false
+		if aim_area:
+			aim_area.monitoring = false
+		if aim_visual:
+			aim_visual.visible = false
+		focus_time = max(focus_time - delta * 4.0, 0.0)
+		if RelicManager.has_effect("slow_time_20"):
+			Engine.time_scale = 1.0
+		return
+
 	if Input.is_action_pressed("aim"):
 		is_aiming = true
 		if aim_area:
@@ -117,7 +159,6 @@ func handle_aiming(delta):
 		if aim_visual:
 			aim_visual.visible = true
 
-		# Relic: Eyeglass (slow time 20%)
 		if RelicManager.has_effect("slow_time_20"):
 			Engine.time_scale = RelicManager.get_time_scale()
 
@@ -134,7 +175,6 @@ func handle_aiming(delta):
 		if aim_visual:
 			aim_visual.visible = false
 		focus_time = max(focus_time - delta * 4.0, 0.0)
-		# Reset time scale
 		if RelicManager.has_effect("slow_time_20"):
 			Engine.time_scale = 1.0
 
@@ -150,7 +190,7 @@ func take_photo():
 		dev_menu = dev_menu.get_node_or_null("DevMenu")
 
 	if dev_menu and dev_menu.infinite_film:
-		pass  # Don't consume film
+		pass
 	else:
 		current_film -= 1
 
@@ -158,7 +198,6 @@ func take_photo():
 	var enemies = get_enemies_in_aim()
 	var kills_this_shot = 0
 
-	# Relic: Wet Print (AOE every 10th shot)
 	if RelicManager.is_aoe_shot():
 		_aoe_damage()
 
@@ -170,7 +209,6 @@ func take_photo():
 		var dmg = calculate_damage(enemy)
 		enemy.take_damage(dmg)
 
-		# Relic: Double Exposure (second hit ×0.5)
 		if RelicManager.has_double_shot():
 			enemy.take_damage(dmg * 0.35)
 
@@ -179,11 +217,10 @@ func take_photo():
 			kills_this_shot += 1
 			print("Killed ", enemy.name)
 
-	# Polaroid: heal on kill
-	if kills_this_shot > 0 and FilmManager.should_heal_on_kill():
-		var heal = FilmManager.get_heal_amount() * kills_this_shot
-		hp = min(hp + heal, max_hp)
-		print("Polaroid heal: +", heal, " HP")
+		if kills_this_shot > 0 and FilmManager.should_heal_on_kill():
+			var heal = FilmManager.get_heal_amount() * kills_this_shot
+			hp = min(hp + heal, max_hp)
+			print("Polaroid heal: +", heal, " HP")
 
 	if enemies.size() == 0:
 		print("Miss! No enemy in frame.")
@@ -196,8 +233,6 @@ func take_photo():
 func calculate_damage(enemy) -> float:
 	var dist = global_position.distance_to(enemy.global_position)
 	var max_r = 160.0
-	# Relic: Remote Trigger (+50% aim range)
-	# Upgrade: range bonus
 	var range_mult = RelicManager.get_aim_range_multiplier() * GameManager.get_upgrade_bonus_range()
 	if aim_shape and aim_shape.shape:
 		max_r = aim_shape.shape.radius * range_mult
@@ -222,7 +257,6 @@ func calculate_damage(enemy) -> float:
 		exposure = 1.0
 
 	var iso_mod = 1.0 + (iso - 100) / 2000.0
-	# Relic: Pocket Reflector (ISO gives damage, no noise penalty)
 	if RelicManager.has_iso_no_noise():
 		iso_mod = 1.0 + min((iso - 100) / 1000.0, 0.5)
 	else:
@@ -234,19 +268,15 @@ func calculate_damage(enemy) -> float:
 	var aperture_mod = clamp(3.5 / aperture, 0.5, 2.5)
 
 	var dmg = base_damage * comp
-	# Camera level bonus
 	dmg *= GameManager.get_camera_bonus_damage()
-	# Use new per-enemy damage calculation for film-specific effects
 	dmg = FilmManager.calculate_damage_for_enemy(dmg, focus_ratio, exposure, iso_mod, aperture_mod, current_film, enemy)
 
-	# Dev: One-Shot
 	var dev_menu = get_tree().get_first_node_in_group("main")
 	if dev_menu:
 		dev_menu = dev_menu.get_node_or_null("DevMenu")
-	if dev_menu and dev_menu.one_shot:
-		dmg = 99999
+		if dev_menu and dev_menu.one_shot:
+			dmg = 99999
 
-	# Relic: Fingerprint (+20% crit at full focus)
 	if focus_ratio >= 0.99 and randf() < RelicManager.get_crit_bonus():
 		dmg *= 2.0
 		print("RELIC CRIT!")
@@ -265,7 +295,6 @@ func get_enemies_in_aim() -> Array:
 
 func start_reload():
 	RelicManager.on_reload()
-	# Relic: Empty Cassette (every 5th reload is free & instant)
 	if RelicManager.is_free_reload():
 		print("Empty Cassette: FREE RELOAD!")
 		max_film = FilmManager.get_max_frames() + RelicManager.get_extra_frames()
@@ -286,20 +315,17 @@ func _on_reload_timer_timeout():
 	print("Reloaded!")
 
 func take_damage(amount: int):
-	# Dev: God Mode
 	var dev_menu = get_tree().get_first_node_in_group("main")
 	if dev_menu:
 		dev_menu = dev_menu.get_node_or_null("DevMenu")
-	if dev_menu and dev_menu.god_mode:
-		return
+		if dev_menu and dev_menu.god_mode:
+			return
 
-	# Relic: Broken UV Filter (first hit = 0)
 	if RelicManager.on_first_hit():
 		print("UV Filter absorbed the hit!")
 		flash_screen()
 		return
 
-	# Relic: Film from Future (death cheat once per run)
 	if hp - amount <= 0:
 		if RelicManager.use_death_cheat():
 			hp = 1
@@ -312,13 +338,12 @@ func take_damage(amount: int):
 		die()
 
 func die():
-	# Relic: Mirror Shard (death shot)
 	if RelicManager.use_death_shot():
 		var nearest = _get_nearest_enemy()
 		if nearest:
 			nearest.take_damage(base_damage * 5.0)
 			print("Mirror Shard final shot!")
-		flash_screen()
+			flash_screen()
 
 	print("GAME OVER")
 	died.emit()
@@ -350,7 +375,7 @@ func _aoe_damage():
 	for enemy in all_enemies:
 		if is_instance_valid(enemy) and "take_damage" in enemy:
 			enemy.take_damage(base_damage * 1.5)
-	print("Wet Print AOE!")
+			print("Wet Print AOE!")
 
 func _get_nearest_enemy() -> Node2D:
 	var enemies = get_tree().get_nodes_in_group("enemies")
@@ -380,6 +405,8 @@ func update_ui():
 		var txt = "FILM: %d/%d" % [current_film, max_film]
 		if is_reloading:
 			txt += " [RELOAD]"
+		if is_blinded:
+			txt += " [BLIND]"
 		film_label.text = txt
 	if params_label:
 		var film_name = FilmManager.current_film.display_name if FilmManager.current_film else "None"

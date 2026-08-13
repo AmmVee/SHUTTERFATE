@@ -1,32 +1,29 @@
-[gd_scene load_steps=5 format=3 uid="uid://b2kllwl6juoxs"]
+[gd_scene load_steps=8 format=3 uid="uid://byp7h0wgs6yop"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_y1mg5"]
 [ext_resource type="PackedScene" uid="uid://cplayer01" path="res://scenes/player.tscn" id="2_4jm1s"]
 [ext_resource type="PackedScene" uid="uid://cenemy01" path="res://scenes/enemy_smear.tscn" id="3_8h1mg"]
 [ext_resource type="PackedScene" uid="uid://cenemy02" path="res://scenes/enemy_grain.tscn" id="4_9i2nh"]
+[ext_resource type="PackedScene" path="res://scenes/enemy_smear_aoe.tscn" id="5_smear_aoe"]
+[ext_resource type="PackedScene" path="res://scenes/enemy_fader.tscn" id="6_fader"]
+[ext_resource type="PackedScene" path="res://scenes/enemy_ghost.tscn" id="7_ghost"]
 
 [node name="Main" type="Node2D"]
 y_sort_enabled = true
 script = ExtResource("1_y1mg5")
 enemy_scene = ExtResource("3_8h1mg")
 enemy_grain_scene = ExtResource("4_9i2nh")
+enemy_smear_aoe_scene = ExtResource("5_smear_aoe")
+enemy_fader_scene = ExtResource("6_fader")
+enemy_ghost_scene = ExtResource("7_ghost")
 
 [node name="Player" parent="." instance=ExtResource("2_4jm1s")]
 
 [node name="FloorUI" type="CanvasLayer" parent="."]
 
 [node name="FloorLabel" type="Label" parent="FloorUI"]
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -200.0
+offset_left = 20.0
 offset_top = 20.0
-offset_right = -20.0
-offset_bottom = 60.0
-grow_horizontal = 0
-theme_override_colors/font_color = Color(0.9, 0.9, 0.8, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 3
-theme_override_font_sizes/font_size = 20
-text = "Floor 1"
-horizontal_alignment = 2
+offset_right = 300.0
+offset_bottom = 50.0
+text = "Этаж: 1"

@@ -2,6 +2,9 @@ extends Node2D
 
 @export var enemy_scene: PackedScene
 @export var enemy_grain_scene: PackedScene
+@export var enemy_smear_aoe_scene: PackedScene
+@export var enemy_fader_scene: PackedScene
+@export var enemy_ghost_scene: PackedScene
 
 var floor_gen: Node2D = null
 var enemies_alive: int = 0
@@ -34,7 +37,6 @@ func _ready():
 
 	generate_floor()
 
-	# Dev menu
 	var dev_menu = load("res://scripts/dev_menu.gd")
 	if dev_menu:
 		var dm = CanvasLayer.new()
@@ -43,31 +45,17 @@ func _ready():
 		add_child(dm)
 		print("Dev menu loaded (F1)")
 
-	# Pause menu
 	var pause_menu = load("res://scripts/pause_menu.gd")
 	if pause_menu:
 		var pm = CanvasLayer.new()
 		pm.set_script(pause_menu)
 		pm.name = "PauseMenu"
-		pm.process_mode = Node.PROCESS_MODE_ALWAYS  # Works while paused
+		pm.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(pm)
 		print("Pause menu loaded (ESC)")
 
 func generate_floor():
-	if floor_gen != null and is_instance_valid(floor_gen):
-		floor_gen.queue_free()
-	for e in current_room_enemies:
-		if is_instance_valid(e):
-			e.queue_free()
-	current_room_enemies.clear()
-	enemies_alive = 0
-	for d in door_nodes:
-		if is_instance_valid(d):
-			d.queue_free()
-	door_nodes.clear()
-	if exit_node != null and is_instance_valid(exit_node):
-		exit_node.queue_free()
-		exit_node = null
+	_cleanup_room()
 
 	floor_gen = Node2D.new()
 	floor_gen.name = "FloorGenerator"
@@ -88,6 +76,22 @@ func generate_floor():
 	enter_current_room()
 	update_floor_ui()
 
+func _cleanup_room():
+	if floor_gen != null and is_instance_valid(floor_gen):
+		floor_gen.queue_free()
+	for e in current_room_enemies:
+		if is_instance_valid(e):
+			e.queue_free()
+	current_room_enemies.clear()
+	enemies_alive = 0
+	for d in door_nodes:
+		if is_instance_valid(d):
+			d.queue_free()
+	door_nodes.clear()
+	if exit_node != null and is_instance_valid(exit_node):
+		exit_node.queue_free()
+	exit_node = null
+
 func enter_current_room():
 	for e in current_room_enemies:
 		if is_instance_valid(e):
@@ -100,7 +104,7 @@ func enter_current_room():
 	door_nodes.clear()
 	if exit_node != null and is_instance_valid(exit_node):
 		exit_node.queue_free()
-		exit_node = null
+	exit_node = null
 
 	var room_data = floor_gen.get_current_room_data()
 	var room_type = room_data.get("type", "combat")
@@ -112,6 +116,8 @@ func enter_current_room():
 		print("Safe room")
 	elif room_type == "boss":
 		spawn_boss_room(room)
+	elif room_type == "treasure":
+		spawn_treasure_room(room)
 	else:
 		var enemy_count = 3 + int(GameManager.current_floor * 1.5)
 		if room_type == "elite":
@@ -134,6 +140,30 @@ func enter_current_room():
 		room_data["cleared"] = true
 		unlock_doors()
 
+func _pick_enemy_scene() -> PackedScene:
+	var floor_num = GameManager.current_floor
+	var roll = randf()
+
+	# Ghost: floor 7+, 10% chance
+	if floor_num >= 7 and enemy_ghost_scene != null and roll < 0.10:
+		return enemy_ghost_scene
+	roll -= 0.10
+
+	# Fader: floor 5+, 12% chance
+	if floor_num >= 5 and enemy_fader_scene != null and roll < 0.12:
+		return enemy_fader_scene
+	roll -= 0.12
+
+	# Smear AOE: floor 3+, 15% chance
+	if floor_num >= 3 and enemy_smear_aoe_scene != null and roll < 0.15:
+		return enemy_smear_aoe_scene
+	roll -= 0.15
+
+	# Default: smear or grain
+	if enemy_grain_scene != null and randf() < 0.3 + (floor_num * 0.05):
+		return enemy_grain_scene
+	return enemy_scene
+
 func spawn_enemy_in_room(room):
 	if enemies_alive >= 20:
 		return
@@ -145,14 +175,23 @@ func spawn_enemy_in_room(room):
 			spawn_pos = room.global_position + room.get_center() + Vector2(randf_range(-40, 40), randf_range(-20, 20))
 	if player and spawn_pos.distance_to(player.global_position) < 120:
 		spawn_pos += Vector2(140, 0)
-	var scene = enemy_scene
-	if enemy_grain_scene != null and randf() < 0.3 + (GameManager.current_floor * 0.05):
-		scene = enemy_grain_scene
+
+	var scene = _pick_enemy_scene()
 	if scene == null:
-		print("ERROR: enemy_scene is null!")
+		print("ERROR: enemy scene is null!")
 		return
+
 	var enemy = scene.instantiate()
 	enemy.global_position = spawn_pos
+	if randf() < 0.08 + (GameManager.current_floor * 0.02):
+		enemy.is_elite = true
+		enemy.max_hp *= 1.5
+		enemy.hp = enemy.max_hp
+		enemy.attack_damage = int(enemy.attack_damage * 1.2)
+		if enemy.has_node("Sprite2D"):
+			enemy.get_node("Sprite2D").modulate = Color(1.0, 0.85, 0.2, 1.0)
+			enemy.get_node("Sprite2D").scale *= 1.3
+		print("ELITE spawned!")
 	add_child(enemy)
 	current_room_enemies.append(enemy)
 	enemies_alive += 1
@@ -164,27 +203,23 @@ func spawn_treasure_room(room):
 		return
 	var chest = Area2D.new()
 	chest.set_script(load("res://scripts/treasure_chest.gd"))
-	# Place chest near center but on valid floor
 	var chest_pos = room.global_position + room.get_center()
 	if room.has_method("is_position_inside_floor") and not room.is_position_inside_floor(chest_pos):
 		chest_pos = room.global_position + room.get_random_floor_position(3)
 	chest.global_position = chest_pos
 
-	# Sprite
 	var sprite = Sprite2D.new()
 	sprite.name = "Sprite2D"
 	sprite.texture = load("res://assets/floor_iso.png")
-	sprite.modulate = Color(1.0, 0.85, 0.2, 1.0)  # Gold
+	sprite.modulate = Color(1.0, 0.85, 0.2, 1.0)
 	sprite.scale = Vector2(1.2, 1.2)
 	chest.add_child(sprite)
 
-	# Collision
 	var coll = CollisionShape2D.new()
 	coll.shape = RectangleShape2D.new()
 	coll.shape.size = Vector2(50, 50)
 	chest.add_child(coll)
 
-	# Label
 	var label = Label.new()
 	label.name = "Label"
 	label.text = "[E] Открыть"
@@ -199,9 +234,7 @@ func spawn_treasure_room(room):
 
 func spawn_boss_room(room):
 	print("BOSS ROOM")
-	# Spawn boss
 	_spawn_boss(room)
-	# Spawn 2-4 minions
 	for i in range(2 + randi() % 3):
 		spawn_enemy_in_room(room)
 
@@ -212,34 +245,43 @@ func _spawn_boss(room):
 	if room.has_method("is_position_inside_floor") and not room.is_position_inside_floor(spawn_pos):
 		spawn_pos = room.global_position + room.get_random_floor_position(3)
 
-	var boss = load("res://scripts/boss_portraitist.gd")
-	if boss == null:
-		print("ERROR: boss_portraitist.gd not found!")
+	var floor_num = GameManager.current_floor
+	var boss_script = _get_boss_for_floor(floor_num)
+	if boss_script == null:
+		print("ERROR: boss script not found!")
 		return
 
 	var boss_node = CharacterBody2D.new()
-	boss_node.set_script(boss)
+	boss_node.set_script(boss_script)
 	boss_node.global_position = spawn_pos
 
-	# Add sprite
 	var sprite = Sprite2D.new()
 	sprite.name = "Sprite2D"
 	sprite.texture = load("res://assets/enemy_iso.png")
-	sprite.modulate = Color(0.9, 0.4, 0.4, 1.0)
-	sprite.scale = Vector2(1.8, 1.8)
+	add_child(boss_node)
 	boss_node.add_child(sprite)
 
-	# Add collision
 	var coll = CollisionShape2D.new()
 	coll.shape = RectangleShape2D.new()
 	coll.shape.size = Vector2(40, 40)
 	boss_node.add_child(coll)
 
-	add_child(boss_node)
 	current_room_enemies.append(boss_node)
 	enemies_alive += 1
 	boss_node.tree_exited.connect(_on_enemy_died)
-	print("PORTRAITIST SPAWNED!")
+	print("BOSS SPAWNED: ", boss_node.name, " at floor ", floor_num)
+
+func _get_boss_for_floor(floor: int):
+	if floor >= 15:
+		return load("res://scripts/boss_aberration.gd")
+	elif floor >= 12:
+		return load("res://scripts/boss_curator.gd")
+	elif floor >= 9:
+		return load("res://scripts/boss_photojournalist.gd")
+	elif floor >= 6:
+		return load("res://scripts/boss_developer.gd")
+	else:
+		return load("res://scripts/boss_portraitist.gd")
 
 func _on_enemy_died():
 	enemies_alive = max(enemies_alive - 1, 0)
@@ -249,10 +291,8 @@ func _on_enemy_died():
 		room_data["cleared"] = true
 
 func unlock_doors():
-	# Room clear bonus
 	GameManager.photo_prints += 10
 	print("Room cleared! +10 prints")
-
 	for d in door_nodes:
 		if is_instance_valid(d):
 			d.set_meta("locked", false)
@@ -285,31 +325,26 @@ func create_transition_door(room, direction: String, target_pos: Vector2i):
 	if room.has_method("get_door_global_position"):
 		door_pos = room.get_door_global_position(direction)
 	else:
-		# Fallback
 		var center = room.global_position
 		if room.has_method("get_center"):
 			center += room.get_center()
 		match direction:
 			"north": door_pos = center + Vector2(0, -280)
 			"south": door_pos = center + Vector2(0, 280)
-			"west":  door_pos = center + Vector2(-520, 0)
-			"east":  door_pos = center + Vector2(520, 0)
+			"west": door_pos = center + Vector2(-520, 0)
+			"east": door_pos = center + Vector2(520, 0)
 
 	door.position = door_pos
 
-	# HUGE colored marker so it's impossible to miss
 	var sprite = Sprite2D.new()
 	sprite.name = "DoorSprite"
 	sprite.texture = load("res://assets/hub_door.png")
 	sprite.scale = Vector2(2.5, 2.5)
-
-	# Bright color per direction
 	match direction:
-		"north": sprite.modulate = Color(0.2, 0.6, 1.0, 1.0)   # Blue
-		"south": sprite.modulate = Color(1.0, 0.2, 0.2, 1.0)   # Red
-		"west":  sprite.modulate = Color(0.2, 1.0, 0.3, 1.0)   # Green
-		"east":  sprite.modulate = Color(1.0, 0.9, 0.2, 1.0)   # Yellow
-
+		"north": sprite.modulate = Color(0.2, 0.6, 1.0, 1.0)
+		"south": sprite.modulate = Color(1.0, 0.2, 0.2, 1.0)
+		"west": sprite.modulate = Color(0.2, 1.0, 0.3, 1.0)
+		"east": sprite.modulate = Color(1.0, 0.9, 0.2, 1.0)
 	door.add_child(sprite)
 
 	var shape = CollisionShape2D.new()
@@ -330,7 +365,7 @@ func create_transition_door(room, direction: String, target_pos: Vector2i):
 	door.body_entered.connect(_on_door_entered.bind(door))
 	door_nodes.append(door)
 	add_child(door)
-	print("  >>> DOOR ", direction, " at ", door_pos, " -> room ", target_pos)
+	print(" >>> DOOR ", direction, " at ", door_pos, " -> room ", target_pos)
 
 func create_exit(room):
 	exit_node = Area2D.new()
@@ -349,7 +384,7 @@ func create_exit(room):
 	sprite.name = "ExitSprite"
 	sprite.texture = load("res://assets/hub_door.png")
 	sprite.scale = Vector2(3.0, 3.0)
-	sprite.modulate = Color(1.0, 0.5, 0.0, 1.0)  # Orange
+	sprite.modulate = Color(1.0, 0.5, 0.0, 1.0)
 	exit_node.add_child(sprite)
 
 	var shape = CollisionShape2D.new()
@@ -369,7 +404,7 @@ func create_exit(room):
 
 	exit_node.body_entered.connect(_on_exit_entered)
 	add_child(exit_node)
-	print("  >>> EXIT at ", exit_pos)
+	print(" >>> EXIT at ", exit_pos)
 
 func _on_door_entered(body, door: Area2D):
 	if not body.is_in_group("player"):
@@ -394,20 +429,19 @@ func move_to_room(target_pos: Vector2i, from_direction: String = ""):
 			match from_direction:
 				"north": enter_direction = "south"
 				"south": enter_direction = "north"
-				"east":  enter_direction = "west"
-				"west":  enter_direction = "east"
+				"east": enter_direction = "west"
+				"west": enter_direction = "east"
 
 			var spawn_pos = Vector2.ZERO
 			var current_room = floor_gen.get_current_room()
 			if enter_direction != "" and current_room and current_room.has_method("get_door_global_position"):
 				spawn_pos = current_room.get_door_global_position(enter_direction)
-				# Сдвигаем внутрь комнаты подальше от двери, чтобы не активировать триггер сразу
 				var offset = Vector2.ZERO
 				match enter_direction:
 					"north": offset = Vector2(0, 90)
 					"south": offset = Vector2(0, -90)
-					"west":  offset = Vector2(90, 0)
-					"east":  offset = Vector2(-90, 0)
+					"west": offset = Vector2(90, 0)
+					"east": offset = Vector2(-90, 0)
 				spawn_pos += offset
 			else:
 				spawn_pos = floor_gen.get_room_center(target_pos)
@@ -434,15 +468,6 @@ func next_floor():
 	GameManager.current_room = 1
 	print("=== NEW FLOOR: ", GameManager.current_floor, " ===")
 	generate_floor()
-
-func _find_room_of_type(room_type: String) -> Vector2i:
-	if floor_gen == null or not floor_gen.has_method("get_current_room_data"):
-		return Vector2i.ZERO
-	for pos in floor_gen.floor_map.keys():
-		var data = floor_gen.floor_map[pos]
-		if data.get("type", "") == room_type:
-			return pos
-	return Vector2i.ZERO
 
 func update_floor_ui():
 	var ui = get_node_or_null("FloorUI")

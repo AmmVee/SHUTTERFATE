@@ -1,0 +1,25 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemy_smear_aoe.gd" id="1_smear_aoe"]
+[ext_resource type="Texture2D" path="res://assets/enemy_iso.png" id="2_enemy"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_smear_aoe"]
+size = Vector2(40, 40)
+
+[node name="EnemySmearAOE" type="CharacterBody2D"]
+script = ExtResource("1_smear_aoe")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_enemy")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_smear_aoe")
+
+[node name="AttackTimer" type="Timer" parent="."]
+one_shot = true
+
+[node name="FlashTimer" type="Timer" parent="."]
+one_shot = true
+
+[node name="WanderTimer" type="Timer" parent="."]
+one_shot = true

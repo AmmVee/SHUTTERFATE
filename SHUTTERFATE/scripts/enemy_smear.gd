@@ -100,15 +100,43 @@ func take_damage(amount: float):
 	if sprite:
 		sprite.modulate = Color(1, 0.3, 0.3)
 	flash_timer.start(0.1)
+	spawn_blood()
+	play_sfx("res://assets/sounds/hit.wav")
 	if player:
 		var knockback = global_position.direction_to(player.global_position) * -50
 		global_position += knockback
 	if hp <= 0:
 		die()
 
+func spawn_blood():
+	for i in range(4):
+		var blood = ColorRect.new()
+		blood.color = Color(0.8, 0.05, 0.05, 0.9)
+		blood.size = Vector2(randf_range(3, 6), randf_range(3, 6))
+		var angle = randf() * TAU
+		var dist = randf_range(10, 30)
+		blood.position = global_position + Vector2(cos(angle), sin(angle)) * dist - blood.size * 0.5
+		blood.z_index = 50
+		get_tree().current_scene.add_child(blood)
+		
+		var tween = get_tree().create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(blood, "modulate:a", 0.0, 0.4 + randf() * 0.3)
+		tween.tween_property(blood, "position:y", blood.position.y + randf_range(10, 25), 0.4)
+		tween.chain().tween_callback(func(): blood.queue_free())
+
 var is_elite: bool = false
 
+func play_sfx(stream_path: String):
+	var sfx = AudioStreamPlayer.new()
+	sfx.stream = load(stream_path)
+	add_child(sfx)
+	sfx.play()
+	sfx.finished.connect(func(): sfx.queue_free())
+
 func die():
+	play_sfx("res://assets/sounds/dissolve.wav")
+	death_animation()
 	# Relic: Mother Negative (ghost copy for 3 sec)
 	if RelicManager.has_ghost_copy():
 		_create_ghost_copy()
@@ -117,6 +145,24 @@ func die():
 	_drop_relic()
 
 	queue_free()
+
+func death_animation():
+	if sprite:
+		var tween = get_tree().create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(sprite, "scale", sprite.scale * 1.4, 0.2)
+		tween.tween_property(sprite, "modulate:a", 0.0, 0.3)
+		# White flash before disappearing
+		var flash = ColorRect.new()
+		flash.color = Color(1.0, 1.0, 1.0, 0.8)
+		flash.size = Vector2(60, 60)
+		flash.position = global_position - Vector2(30, 30)
+		flash.z_index = 100
+		get_tree().current_scene.add_child(flash)
+		var ft = get_tree().create_tween()
+		ft.tween_property(flash, "modulate:a", 0.0, 0.2)
+		ft.tween_property(flash, "scale", Vector2(2.0, 2.0), 0.2)
+		ft.chain().tween_callback(func(): flash.queue_free())
 
 func _drop_relic():
 	var roll = randf()

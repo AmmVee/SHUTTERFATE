@@ -106,26 +106,45 @@ func enter_current_room():
 		exit_node.queue_free()
 	exit_node = null
 
+	AchievementManager.set_max_floor(GameManager.current_floor)
+	AchievementManager.check_old_lens_floor5(GameManager.current_floor)
 	var room_data = floor_gen.get_current_room_data()
 	var room_type = room_data.get("type", "combat")
 	var room = floor_gen.get_current_room()
 
 	print("=== Room: ", floor_gen.current_room_pos, " | Type: ", room_type, " ===")
 
-	if room_type == "start":
-		print("Safe room")
-	elif room_type == "boss":
-		spawn_boss_room(room)
-	elif room_type == "treasure":
-		spawn_treasure_room(room)
-	else:
-		var enemy_count = 3 + int(GameManager.current_floor * 1.5)
-		if room_type == "elite":
-			enemy_count += 3
-		enemy_count = min(enemy_count, 15)
-		print("Spawning ", enemy_count, " enemies")
-		for i in range(enemy_count):
-			spawn_enemy_in_room(room)
+	match room_type:
+		"start":
+			print("Safe room")
+		"boss":
+			spawn_boss_room(room)
+		"treasure":
+			spawn_treasure_room(room)
+		"trap":
+			spawn_trap_room(room)
+		"puzzle":
+			spawn_puzzle_room(room)
+		"rest":
+			spawn_rest_room(room)
+		"miniboss":
+			spawn_miniboss_room(room)
+		"gallery":
+			spawn_gallery_room(room)
+		_:
+			# combat / elite — revisit scaling
+			var visits = room_data.get("visits", 0)
+			visits += 1
+			room_data["visits"] = visits
+			room_data["cleared"] = false
+			print("Room visits: ", visits)
+			var enemy_count = 3 + int(GameManager.current_floor * 1.5)
+			if room_type == "elite":
+				enemy_count += 3
+			enemy_count = min(enemy_count, 15)
+			print("Spawning ", enemy_count, " enemies (visit #", visits, ")")
+			for i in range(enemy_count):
+				spawn_enemy_in_room(room, visits)
 
 	var connections = room_data.get("connections", {})
 	print("Connections: ", connections.keys())
@@ -135,6 +154,10 @@ func enter_current_room():
 
 	if room_type == "boss":
 		create_exit(room)
+
+	if room_type == "treasure":
+		room_data["cleared"] = true
+		unlock_doors()
 
 	if room_type == "start":
 		room_data["cleared"] = true
@@ -164,7 +187,7 @@ func _pick_enemy_scene() -> PackedScene:
 		return enemy_grain_scene
 	return enemy_scene
 
-func spawn_enemy_in_room(room):
+func spawn_enemy_in_room(room, visit_count: int = 1):
 	if enemies_alive >= 20:
 		return
 	if room == null or not room.has_method("get_random_floor_position"):
@@ -183,9 +206,25 @@ func spawn_enemy_in_room(room):
 
 	var enemy = scene.instantiate()
 	enemy.global_position = spawn_pos
+
+	# Pact: Double Exposure (+50% enemy HP)
+	var pact_hp = GameManager.get_pact_hp_mult()
+	if pact_hp > 1.0:
+		enemy.max_hp = int(enemy.max_hp * pact_hp)
+		enemy.hp = enemy.max_hp
+
+	# Scale enemies by revisit count
+	var scale_mult = 1.0 + (visit_count - 1) * 0.25
+	if scale_mult > 1.0:
+		enemy.max_hp = int(enemy.max_hp * scale_mult)
+		enemy.hp = enemy.max_hp
+		enemy.attack_damage = int(enemy.attack_damage * scale_mult)
+		enemy.move_speed = enemy.move_speed * (1.0 + (visit_count - 1) * 0.1)
+		print("Enemy scaled x", scale_mult, " (visit #", visit_count, ")")
+
 	if randf() < 0.08 + (GameManager.current_floor * 0.02):
 		enemy.is_elite = true
-		enemy.max_hp *= 1.5
+		enemy.max_hp = int(enemy.max_hp * 1.5)
 		enemy.hp = enemy.max_hp
 		enemy.attack_damage = int(enemy.attack_damage * 1.2)
 		if enemy.has_node("Sprite2D"):
@@ -231,6 +270,14 @@ func spawn_treasure_room(room):
 
 	add_child(chest)
 	print("Chest spawned at: ", chest.global_position)
+
+func _get_boss_name() -> String:
+	match GameManager.current_floor:
+		1,2,3,4,5: return "ПОРТРЕТИСТ"
+		6,7,8: return "ПРОЯВЩИК"
+		9,10,11: return "ФОТОЖУРНАЛИСТ"
+		12,13,14: return "КУРАТОР"
+		_: return "АБЕРРАЦИЯ"
 
 func spawn_boss_room(room):
 	print("BOSS ROOM")
@@ -287,7 +334,9 @@ func _on_enemy_died():
 	enemies_alive = max(enemies_alive - 1, 0)
 	if enemies_alive <= 0:
 		unlock_doors()
-		var room_data = floor_gen.get_current_room_data()
+		AchievementManager.set_max_floor(GameManager.current_floor)
+	AchievementManager.check_old_lens_floor5(GameManager.current_floor)
+	var room_data = floor_gen.get_current_room_data()
 		room_data["cleared"] = true
 
 func unlock_doors():
@@ -474,7 +523,9 @@ func update_floor_ui():
 	if ui:
 		var label = ui.get_node_or_null("FloorLabel")
 		if label and floor_gen:
-			var room_data = floor_gen.get_current_room_data()
+			AchievementManager.set_max_floor(GameManager.current_floor)
+	AchievementManager.check_old_lens_floor5(GameManager.current_floor)
+	var room_data = floor_gen.get_current_room_data()
 			var room_type = room_data.get("type", "combat")
 			var type_names = {"start": "Старт", "combat": "Бой", "elite": "Элита", "boss": "БОСС", "treasure": "Сокровище"}
 			var type_str = type_names.get(room_type, "Бой")

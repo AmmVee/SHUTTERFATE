@@ -31,6 +31,15 @@ func _ready():
 	create_film_selector()
 	create_relic_ui()
 
+	# Dev menu
+	var dev_menu = load("res://scripts/dev_menu.gd")
+	if dev_menu:
+		var dm = CanvasLayer.new()
+		dm.set_script(dev_menu)
+		dm.name = "DevMenu"
+		add_child(dm)
+		print("Dev menu loaded in hub (F1)")
+
 var near_desk: bool = false
 var near_npc: bool = false
 
@@ -62,11 +71,329 @@ func _on_npc_exited(body):
 
 func start_run():
 	print("Entering the Obscura...")
+	if GameManager.pacts_unlocked:
+		create_pact_selector()
+	else:
+		GameManager.start_run()
+
+var pact_selector_open: bool = false
+
+func create_pact_selector():
+	pact_selector_open = true
+	var canvas = get_node_or_null("CanvasLayer")
+	if canvas == null:
+		return
+
+	var panel = ColorRect.new()
+	panel.name = "PactPanel"
+	panel.color = Color(0.05, 0.05, 0.08, 0.95)
+	panel.position = Vector2(460, 150)
+	panel.size = Vector2(1000, 700)
+	canvas.add_child(panel)
+
+	var title = Label.new()
+	title.text = "УСЛОВИЯ ЗАБЕГА"
+	title.position = Vector2(0, 20)
+	title.size = Vector2(1000, 50)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", Color(0.9, 0.3, 0.3, 1))
+	title.add_theme_constant_override("outline_size", 4)
+	panel.add_child(title)
+
+	var subtitle = Label.new()
+	subtitle.text = "Выберите до %d условий. Каждое увеличивает награду." % GameManager.max_pacts
+	subtitle.position = Vector2(0, 70)
+	subtitle.size = Vector2(1000, 30)
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.add_theme_font_size_override("font_size", 14)
+	subtitle.add_theme_color_override("font_color", Color(0.6, 0.6, 0.5, 1))
+	panel.add_child(subtitle)
+
+	var start_y = 130
+	var gap = 130
+	var idx = 0
+	for pact_id in GameManager.PACTS.keys():
+		var pact = GameManager.PACTS[pact_id]
+		var is_active = GameManager.has_pact(pact_id)
+
+		var btn = Button.new()
+		btn.name = "PactBtn_%s" % pact_id
+		btn.position = Vector2(100, start_y + idx * gap)
+		btn.size = Vector2(800, 110)
+		btn.add_theme_font_size_override("font_size", 14)
+		btn.text = "%s%s\n%s\nБонус: +%d%% отпечатков" % [
+			"[✓] " if is_active else "[ ] ",
+			pact.name,
+			pact.desc,
+			int(pact.bonus * 100)
+		]
+		btn.add_theme_color_override("font_color", pact.color if is_active else Color(0.5, 0.5, 0.5, 1))
+		btn.pressed.connect(_on_toggle_pact.bind(pact_id))
+		panel.add_child(btn)
+		idx += 1
+
+	# Start button
+	var btn_start = Button.new()
+	btn_start.text = "НАЧАТЬ ЗАБЕГ"
+	btn_start.position = Vector2(300, 650)
+	btn_start.size = Vector2(400, 50)
+	btn_start.add_theme_font_size_override("font_size", 18)
+	btn_start.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4, 1))
+	btn_start.pressed.connect(_on_confirm_pacts)
+	panel.add_child(btn_start)
+
+func _on_toggle_pact(pact_id: String):
+	GameManager.toggle_pact(pact_id)
+	close_pact_selector()
+	create_pact_selector()
+
+func close_pact_selector():
+	pact_selector_open = false
+	var canvas = get_node_or_null("CanvasLayer")
+	if canvas:
+		var panel = canvas.get_node_or_null("PactPanel")
+		if panel:
+			panel.queue_free()
+
+func _on_confirm_pacts():
+	close_pact_selector()
 	GameManager.start_run()
 
 var upgrade_panel_open: bool = false
 var shop_panel_open: bool = false
 var npc_menu_open: bool = false
+
+func _on_achievements():
+	close_all_panels()
+	create_achievements_ui()
+
+func _on_daily_challenge():
+	close_all_panels()
+	create_daily_challenge_ui()
+
+func _on_toggle_coop():
+	GameManager.coop_mode = not GameManager.coop_mode
+	close_all_panels()
+	create_npc_menu()
+
+func _on_gallery_hub():
+	close_all_panels()
+	var editor = CanvasLayer.new()
+	editor.set_script(load("res://scripts/photo_editor.gd"))
+	editor.name = "PhotoEditor"
+	editor.snapshot_data = {"boss_name": "", "floor": 0, "date": ""}
+	add_child(editor)
+	# Call gallery directly
+	await get_tree().create_timer(0.1).timeout
+	var pe = get_node_or_null("PhotoEditor")
+	if pe and pe.has_method("create_gallery_ui"):
+		pe.create_gallery_ui()
+
+func create_daily_challenge_ui():
+	var canvas = get_node_or_null("CanvasLayer")
+	if canvas == null:
+		return
+	
+	var panel = ColorRect.new()
+	panel.name = "DailyChallengePanel"
+	panel.color = Color(0.05, 0.05, 0.08, 0.95)
+	panel.position = Vector2(460, 150)
+	panel.size = Vector2(1000, 600)
+	canvas.add_child(panel)
+	
+	var ch = DailyChallengeManager.get_challenge()
+	
+	var title = Label.new()
+	title.text = "ЕЖЕДНЕВНОЕ ИСПЫТАНИЕ"
+	title.position = Vector2(0, 20)
+	title.size = Vector2(1000, 50)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 32)
+	title.add_theme_color_override("font_color", Color(0.3, 0.8, 0.9, 1))
+	title.add_theme_constant_override("outline_size", 4)
+	panel.add_child(title)
+	
+	var date_label = Label.new()
+	date_label.text = ch.get("date", "")
+	date_label.position = Vector2(0, 70)
+	date_label.size = Vector2(1000, 30)
+	date_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	date_label.add_theme_font_size_override("font_size", 14)
+	date_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1))
+	panel.add_child(date_label)
+	
+	var name_label = Label.new()
+	name_label.text = ch.get("name", "")
+	name_label.position = Vector2(0, 120)
+	name_label.size = Vector2(1000, 40)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.add_theme_font_size_override("font_size", 24)
+	name_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.5, 1))
+	panel.add_child(name_label)
+	
+	var desc_label = Label.new()
+	desc_label.text = ch.get("desc", "")
+	desc_label.position = Vector2(100, 180)
+	desc_label.size = Vector2(800, 60)
+	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc_label.add_theme_font_size_override("font_size", 16)
+	desc_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.6, 1))
+	panel.add_child(desc_label)
+	
+	var bonus_label = Label.new()
+	bonus_label.text = "Бонус: %d отпечатков" % ch.get("bonus_prints", 0)
+	bonus_label.position = Vector2(0, 260)
+	bonus_label.size = Vector2(1000, 30)
+	bonus_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bonus_label.add_theme_font_size_override("font_size", 18)
+	bonus_label.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4, 1))
+	panel.add_child(bonus_label)
+	
+	var status_label = Label.new()
+	var completed = ch.get("completed", false)
+	var best = ch.get("best_score", 0)
+	status_label.text = "Статус: %s | Лучший результат: %d" % ["Выполнено" if completed else "Не выполнено", best]
+	status_label.position = Vector2(0, 310)
+	status_label.size = Vector2(1000, 30)
+	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status_label.add_theme_font_size_override("font_size", 14)
+	status_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+	panel.add_child(status_label)
+	
+	# Leaderboard
+	var lb_title = Label.new()
+	lb_title.text = "ТАБЛИЦА ЛИДЕРОВ"
+	lb_title.position = Vector2(0, 370)
+	lb_title.size = Vector2(1000, 30)
+	lb_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lb_title.add_theme_font_size_override("font_size", 18)
+	lb_title.add_theme_color_override("font_color", Color(0.9, 0.7, 0.3, 1))
+	panel.add_child(lb_title)
+	
+	var lb = DailyChallengeManager.get_leaderboard()
+	var lb_y = 410
+	for i in range(min(lb.size(), 5)):
+		var entry = lb[i]
+		var entry_label = Label.new()
+		entry_label.text = "%d. %s — %d отпечатков (Этаж %d)" % [i+1, entry["date"], entry["score"], entry["floor"]]
+		entry_label.position = Vector2(200, lb_y + i * 25)
+		entry_label.size = Vector2(600, 22)
+		entry_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		entry_label.add_theme_font_size_override("font_size", 12)
+		entry_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.6, 1))
+		panel.add_child(entry_label)
+	
+	var btn_start = Button.new()
+	btn_start.text = "НАЧАТЬ ИСПЫТАНИЕ" if not completed else "ПОВТОРИТЬ"
+	btn_start.position = Vector2(300, 540)
+	btn_start.size = Vector2(400, 50)
+	btn_start.add_theme_font_size_override("font_size", 18)
+	btn_start.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4, 1))
+	btn_start.pressed.connect(_on_start_daily)
+	panel.add_child(btn_start)
+	
+	var btn_close = Button.new()
+	btn_close.text = "ЗАКРЫТЬ"
+	btn_close.position = Vector2(350, 20)
+	btn_close.size = Vector2(100, 30)
+	btn_close.add_theme_font_size_override("font_size", 12)
+	btn_close.add_theme_color_override("font_color", Color(0.8, 0.3, 0.3, 1))
+	btn_close.pressed.connect(func(): panel.queue_free())
+	panel.add_child(btn_close)
+
+func _on_start_daily():
+	close_all_panels()
+	DailyChallengeManager.reset_daily()
+	GameManager.start_run()
+
+func create_achievements_ui():
+	var canvas = get_node_or_null("CanvasLayer")
+	if canvas == null:
+		return
+	
+	var panel = ColorRect.new()
+	panel.name = "AchievementsPanel"
+	panel.color = Color(0.05, 0.05, 0.08, 0.95)
+	panel.position = Vector2(360, 100)
+	panel.size = Vector2(1200, 800)
+	canvas.add_child(panel)
+	
+	var title = Label.new()
+	title.text = "ДОСТИЖЕНИЯ"
+	title.position = Vector2(0, 20)
+	title.size = Vector2(1200, 50)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 32)
+	title.add_theme_color_override("font_color", Color(0.9, 0.85, 0.3, 1))
+	title.add_theme_constant_override("outline_size", 4)
+	panel.add_child(title)
+	
+	var scroll = ScrollContainer.new()
+	scroll.position = Vector2(50, 90)
+	scroll.size = Vector2(1100, 620)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scroll)
+	
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	scroll.add_child(vbox)
+	
+	var unlocked = AchievementManager.unlocked_achievements.size()
+	var total = AchievementManager.achievements.size()
+	
+	var progress = Label.new()
+	progress.text = "Разблокировано: %d / %d" % [unlocked, total]
+	progress.add_theme_font_size_override("font_size", 16)
+	progress.add_theme_color_override("font_color", Color(0.7, 0.7, 0.6, 1))
+	vbox.add_child(progress)
+	
+	for id in AchievementManager.achievements.keys():
+		var ach = AchievementManager.achievements[id]
+		var is_unlocked = id in AchievementManager.unlocked_achievements
+		
+		var hbox = HBoxContainer.new()
+		hbox.add_theme_constant_override("separation", 12)
+		
+		var status = Label.new()
+		status.text = "[✓]" if is_unlocked else "[ ]"
+		status.add_theme_font_size_override("font_size", 18)
+		status.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4, 1) if is_unlocked else Color(0.4, 0.4, 0.4, 1))
+		hbox.add_child(status)
+		
+		var info = VBoxContainer.new()
+		info.add_theme_constant_override("separation", 2)
+		
+		var name_label = Label.new()
+		name_label.text = ach["name"]
+		name_label.add_theme_font_size_override("font_size", 14)
+		name_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.5, 1) if is_unlocked else Color(0.5, 0.5, 0.5, 1))
+		info.add_child(name_label)
+		
+		var desc_label = Label.new()
+		desc_label.text = ach["desc"]
+		desc_label.add_theme_font_size_override("font_size", 11)
+		desc_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+		info.add_child(desc_label)
+		
+		hbox.add_child(info)
+		vbox.add_child(hbox)
+	
+	var btn_close = Button.new()
+	btn_close.text = "ЗАКРЫТЬ"
+	btn_close.position = Vector2(450, 730)
+	btn_close.size = Vector2(300, 40)
+	btn_close.add_theme_font_size_override("font_size", 16)
+	btn_close.add_theme_color_override("font_color", Color(0.8, 0.3, 0.3, 1))
+	btn_close.pressed.connect(func(): panel.queue_free())
+	panel.add_child(btn_close)
+
+func _on_settings():
+	close_all_panels()
+	var sm = CanvasLayer.new()
+	sm.set_script(load("res://scripts/settings_menu.gd"))
+	sm.name = "SettingsMenu"
+	add_child(sm)
 
 func talk_to_npc():
 	if upgrade_panel_open or shop_panel_open or npc_menu_open:
@@ -129,22 +456,73 @@ func create_npc_menu():
 	btn_shop.pressed.connect(func(): close_npc_menu(); create_shop_ui())
 	panel.add_child(btn_shop)
 
+	var btn_ach = Button.new()
+	btn_ach.text = "ДОСТИЖЕНИЯ"
+	btn_ach.position = Vector2(btn_x, btn_y + 130)
+	btn_ach.size = Vector2(btn_w, btn_h)
+	btn_ach.add_theme_font_size_override("font_size", 16)
+	btn_ach.add_theme_color_override("font_color", Color(0.9, 0.7, 0.2, 1))
+	btn_ach.pressed.connect(_on_achievements)
+	panel.add_child(btn_ach)
+
+	var btn_daily = Button.new()
+	btn_daily.text = "ЕЖЕДНЕВНОЕ ИСПЫТАНИЕ"
+	btn_daily.position = Vector2(btn_x, btn_y + 200)
+	btn_daily.size = Vector2(btn_w, btn_h)
+	btn_daily.add_theme_font_size_override("font_size", 16)
+	btn_daily.add_theme_color_override("font_color", Color(0.3, 0.8, 0.9, 1))
+	btn_daily.pressed.connect(_on_daily_challenge)
+	panel.add_child(btn_daily)
+
+	var btn_gallery = Button.new()
+	btn_gallery.text = "ГАЛЕРЕЯ (%d)" % GameManager.photo_gallery.size()
+	btn_gallery.position = Vector2(btn_x, btn_y + 270)
+	btn_gallery.size = Vector2(btn_w, btn_h)
+	btn_gallery.add_theme_font_size_override("font_size", 16)
+	btn_gallery.add_theme_color_override("font_color", Color(0.9, 0.5, 0.8, 1))
+	btn_gallery.pressed.connect(_on_gallery_hub)
+	panel.add_child(btn_gallery)
+
+	var btn_coop = Button.new()
+	btn_coop.text = "КООПЕРАТИВ: %s" % ("ВКЛ" if GameManager.coop_mode else "ВЫКЛ")
+	btn_coop.position = Vector2(btn_x, btn_y + 340)
+	btn_coop.size = Vector2(btn_w, btn_h)
+	btn_coop.add_theme_font_size_override("font_size", 16)
+	btn_coop.add_theme_color_override("font_color", Color(0.3, 0.9, 0.6, 1) if GameManager.coop_mode else Color(0.5, 0.5, 0.5, 1))
+	btn_coop.pressed.connect(_on_toggle_coop)
+	panel.add_child(btn_coop)
+
+	var btn_settings = Button.new()
+	btn_settings.text = "НАСТРОЙКИ"
+	btn_settings.position = Vector2(btn_x, btn_y + 130)
+	btn_settings.size = Vector2(btn_w, btn_h)
+	btn_settings.add_theme_font_size_override("font_size", 16)
+	btn_settings.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0, 1))
+	btn_settings.pressed.connect(_on_settings)
+	panel.add_child(btn_settings)
+
 	var btn_close = Button.new()
 	btn_close.text = "УЙТИ"
-	btn_close.position = Vector2(btn_x, btn_y + 130)
+	btn_close.position = Vector2(btn_x, btn_y + 480)
 	btn_close.size = Vector2(btn_w, btn_h)
 	btn_close.add_theme_font_size_override("font_size", 16)
 	btn_close.add_theme_color_override("font_color", Color(0.8, 0.3, 0.3, 1))
 	btn_close.pressed.connect(close_npc_menu)
 	panel.add_child(btn_close)
 
-func close_npc_menu():
-	npc_menu_open = false
+func close_all_panels():
 	var canvas = get_node_or_null("CanvasLayer")
 	if canvas:
-		var panel = canvas.get_node_or_null("NPCMenuPanel")
-		if panel:
-			panel.queue_free()
+		for child in canvas.get_children():
+			var n = child.name
+			if n == "NPCMenuPanel" or n == "ShopPanel" or n == "UpgradePanel":
+				child.queue_free()
+	npc_menu_open = false
+	shop_panel_open = false
+	upgrade_panel_open = false
+
+func close_npc_menu():
+	close_all_panels()
 
 func create_shop_ui():
 	shop_panel_open = true
@@ -265,12 +643,8 @@ func _on_regen_shop():
 		print("Shop regenerated")
 
 func close_shop_ui():
-	shop_panel_open = false
-	var canvas = get_node_or_null("CanvasLayer")
-	if canvas:
-		var panel = canvas.get_node_or_null("ShopPanel")
-		if panel:
-			panel.queue_free()
+	close_all_panels()
+	create_npc_menu()
 
 func create_upgrade_ui():
 	upgrade_panel_open = true
@@ -369,13 +743,7 @@ func _on_upgrade_pressed(id: String):
 		print("Purchased upgrade: ", id)
 
 func close_upgrade_ui():
-	upgrade_panel_open = false
-	var canvas = get_node_or_null("CanvasLayer")
-	if canvas:
-		var panel = canvas.get_node_or_null("UpgradePanel")
-		if panel:
-			panel.queue_free()
-	# Return to NPC menu
+	close_all_panels()
 	create_npc_menu()
 
 func show_prompt(text: String):
@@ -523,37 +891,57 @@ func create_relic_ui():
 		return
 
 	for child in canvas.get_children():
-		if child.name.begins_with("Relic"):
-			child.queue_free()
+		if child.name.begins_with("Relic") or child.name == "RelicScroll":
+			child.free()
+
+	var scroll = ScrollContainer.new()
+	scroll.name = "RelicScroll"
+	scroll.position = Vector2(20, 860)
+	scroll.size = Vector2(440, 200)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	canvas.add_child(scroll)
+
+	var vbox = VBoxContainer.new()
+	vbox.name = "RelicVBox"
+	vbox.size = Vector2(420, 0)
+	vbox.add_theme_constant_override("separation", 6)
+	scroll.add_child(vbox)
 
 	var title = Label.new()
 	title.name = "RelicTitle"
 	title.text = "РЕЛИКВИИ (экипировано %d/%d)" % [RelicManager.equipped_relics.size(), RelicManager.MAX_EQUIPPED]
-	title.position = Vector2(50, 880)
-	title.size = Vector2(400, 30)
-	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_font_size_override("font_size", 16)
 	title.add_theme_color_override("font_color", Color(0.9, 0.85, 0.5, 1))
 	title.add_theme_constant_override("outline_size", 3)
-	canvas.add_child(title)
+	vbox.add_child(title)
 
-	# Show equipped relics
 	for i in range(RelicManager.equipped_relics.size()):
 		var rid = RelicManager.equipped_relics[i]
 		var r = RelicManager.get_relic(rid)
 		if r == null:
 			continue
+		var hbox = HBoxContainer.new()
+		hbox.add_theme_constant_override("separation", 8)
+
+		var btn_uneq = Button.new()
+		btn_uneq.name = "RelicUnequip_%d" % i
+		btn_uneq.text = "×"
+		btn_uneq.custom_minimum_size = Vector2(30, 22)
+		btn_uneq.add_theme_font_size_override("font_size", 10)
+		btn_uneq.add_theme_color_override("font_color", Color(1, 0.3, 0.3, 1))
+		btn_uneq.pressed.connect(_on_unequip_relic.bind(rid))
+		hbox.add_child(btn_uneq)
+
 		var label = Label.new()
 		label.name = "RelicEquipped_%d" % i
 		label.text = "• %s" % r.display_name
-		label.position = Vector2(50, 910 + i * 22)
-		label.size = Vector2(350, 20)
 		label.add_theme_font_size_override("font_size", 12)
 		label.add_theme_color_override("font_color", r.rarity_color)
 		label.add_theme_constant_override("outline_size", 2)
-		canvas.add_child(label)
+		hbox.add_child(label)
+		vbox.add_child(hbox)
 
-	# Show owned but not equipped
-	var y_off = 910 + RelicManager.equipped_relics.size() * 22 + 10
 	var unequipped = []
 	for rid in RelicManager.owned_relics:
 		if rid not in RelicManager.equipped_relics:
@@ -563,12 +951,9 @@ func create_relic_ui():
 		var sub = Label.new()
 		sub.name = "RelicSubTitle"
 		sub.text = "В инвентаре:"
-		sub.position = Vector2(50, y_off)
-		sub.size = Vector2(300, 20)
 		sub.add_theme_font_size_override("font_size", 11)
 		sub.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
-		canvas.add_child(sub)
-		y_off += 20
+		vbox.add_child(sub)
 
 		for i in range(unequipped.size()):
 			var rid = unequipped[i]
@@ -578,32 +963,14 @@ func create_relic_ui():
 			var btn = Button.new()
 			btn.name = "RelicBtn_%d" % i
 			btn.text = "+ %s" % r.display_name
-			btn.position = Vector2(50, y_off + i * 28)
-			btn.size = Vector2(200, 24)
 			btn.add_theme_font_size_override("font_size", 10)
 			btn.add_theme_color_override("font_color", r.rarity_color)
 			btn.pressed.connect(_on_equip_relic.bind(rid))
-			canvas.add_child(btn)
-
-	# Unequip buttons
-	if RelicManager.equipped_relics.size() > 0:
-		var y_uneq = 910
-		for i in range(RelicManager.equipped_relics.size()):
-			var rid = RelicManager.equipped_relics[i]
-			var btn = Button.new()
-			btn.name = "RelicUnequip_%d" % i
-			btn.text = "×"
-			btn.position = Vector2(10, y_uneq + i * 22)
-			btn.size = Vector2(30, 20)
-			btn.add_theme_font_size_override("font_size", 10)
-			btn.add_theme_color_override("font_color", Color(1, 0.3, 0.3, 1))
-			btn.pressed.connect(_on_unequip_relic.bind(rid))
-			canvas.add_child(btn)
-
+			vbox.add_child(btn)
 func _on_equip_relic(relic_id: String):
 	RelicManager.equip(relic_id)
-	create_relic_ui()
+	call_deferred("create_relic_ui")
 
 func _on_unequip_relic(relic_id: String):
 	RelicManager.unequip(relic_id)
-	create_relic_ui()
+	call_deferred("create_relic_ui")

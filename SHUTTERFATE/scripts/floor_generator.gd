@@ -11,6 +11,11 @@ const ROOM_COMBAT = "combat"
 const ROOM_ELITE = "elite"
 const ROOM_BOSS = "boss"
 const ROOM_TREASURE = "treasure"
+const ROOM_TRAP = "trap"
+const ROOM_PUZZLE = "puzzle"
+const ROOM_REST = "rest"
+const ROOM_MINIBOSS = "miniboss"
+const ROOM_GALLERY = "gallery"
 
 func _ready():
 	generate_floor()
@@ -56,7 +61,22 @@ func generate_floor():
 						candidates.append({"from": pos, "to": f})
 		if candidates.size() > 0:
 			var choice = candidates[randi() % candidates.size()]
-			var rtype = ROOM_TREASURE if randf() < 0.5 else ROOM_ELITE
+			var rtype_roll = randf()
+			var rtype = ROOM_COMBAT
+			if rtype_roll < 0.15:
+				rtype = ROOM_TRAP
+			elif rtype_roll < 0.30:
+				rtype = ROOM_PUZZLE
+			elif rtype_roll < 0.45:
+				rtype = ROOM_REST
+			elif rtype_roll < 0.60:
+				rtype = ROOM_MINIBOSS
+			elif rtype_roll < 0.75:
+				rtype = ROOM_GALLERY
+			elif rtype_roll < 0.88:
+				rtype = ROOM_TREASURE
+			else:
+				rtype = ROOM_ELITE
 			floor_map[choice.to] = {"type": rtype, "connections": {}, "cleared": false}
 			_connect_rooms(choice.from, choice.to)
 			print("Side room ", rtype, " at ", choice.to, " connected from ", choice.from)

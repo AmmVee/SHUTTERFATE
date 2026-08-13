@@ -42,6 +42,10 @@ func open_chest():
 		var r = RelicManager.get_relic(relic_id)
 		print("TREASURE: Unlocked ", r.display_name if r else relic_id)
 		_show_loot_popup(r)
+		# Apply relic effects immediately
+		var player = get_tree().get_first_node_in_group("player")
+		if player and player.has_method("recalculate_max_film"):
+			player.recalculate_max_film()
 	else:
 		print("TREASURE: Nothing this time...")
 

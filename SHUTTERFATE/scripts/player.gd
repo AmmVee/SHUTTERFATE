@@ -6,8 +6,12 @@ signal died
 @export var aim_slowdown: float = 0.35
 @export var max_hp: int = 80
 @export var base_damage: float = 10.0
+@export var player_id: int = 1
 
 var hp: int = max_hp
+var is_downed: bool = false
+var downed_timer: float = 0.0
+var max_downed_time: float = 15.0
 var is_aiming: bool = false
 var focus_time: float = 0.0
 var max_focus_time: float = 1.5
@@ -39,6 +43,15 @@ var params_label: Label
 
 func _ready():
 	add_to_group("player")
+	AchievementManager.reset_run_damage()
+	
+	# Coop: distinguish player 2
+	if player_id == 2:
+		var sprite = get_node_or_null("Sprite2D")
+		if sprite:
+			sprite.modulate = Color(0.4, 0.7, 1.0, 1.0)
+		# Offset position slightly to avoid overlap
+		global_position += Vector2(30, 15)
 
 	var hp_bonus = RelicManager.get_max_hp_bonus()
 	max_hp += GameManager.get_camera_bonus_hp()
@@ -66,7 +79,14 @@ func _ready():
 		reload_timer.name = "ReloadTimer"
 		reload_timer.one_shot = true
 		add_child(reload_timer)
-		reload_timer.timeout.connect(_on_reload_timer_timeout)
+	reload_timer.timeout.connect(_on_reload_timer_timeout)
+
+	# SFX player
+	var sfx = get_node_or_null("SFXPlayer")
+	if sfx == null:
+		sfx = AudioStreamPlayer.new()
+		sfx.name = "SFXPlayer"
+		add_child(sfx)
 
 	var canvas = get_node_or_null("CanvasLayer")
 	if canvas:
@@ -99,6 +119,12 @@ func _ready():
 
 	update_ui()
 
+func recalculate_max_film():
+	var new_max = FilmManager.get_max_frames() + RelicManager.get_extra_frames() + GameManager.get_upgrade_bonus_frames()
+	max_film = new_max
+	current_film = min(current_film + RelicManager.get_extra_frames(), max_film)
+	update_ui()
+
 func _physics_process(delta):
 	_update_blind(delta)
 	handle_movement()
@@ -128,7 +154,13 @@ func apply_blind(duration: float):
 	print("PLAYER BLINDED for ", duration, " sec!")
 
 func handle_movement():
-	var input = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	var input: Vector2
+	if player_id == 1:
+		input = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	else:
+		input = Input.get_vector("ui_left2", "ui_right2", "ui_up2", "ui_down2")
+	if input.length() > 0.1 and randf() < 0.03:
+		play_sfx("res://assets/sounds/footstep.wav")
 	var iso_x = input.x
 	var iso_y = input.y
 	var slow = aim_slowdown
@@ -147,6 +179,7 @@ func handle_aiming(delta):
 			aim_area.monitoring = false
 		if aim_visual:
 			aim_visual.visible = false
+			aim_visual.scale = Vector2(1, 1)
 		focus_time = max(focus_time - delta * 4.0, 0.0)
 		if RelicManager.has_effect("slow_time_20"):
 			Engine.time_scale = 1.0
@@ -174,6 +207,7 @@ func handle_aiming(delta):
 			aim_area.monitoring = false
 		if aim_visual:
 			aim_visual.visible = false
+			aim_visual.scale = Vector2(1, 1)
 		focus_time = max(focus_time - delta * 4.0, 0.0)
 		if RelicManager.has_effect("slow_time_20"):
 			Engine.time_scale = 1.0
@@ -185,6 +219,8 @@ func handle_shooting():
 		take_photo()
 
 func take_photo():
+	play_sfx("res://assets/sounds/click.wav")
+	AchievementManager.add_shot()
 	var dev_menu = get_tree().get_first_node_in_group("main")
 	if dev_menu:
 		dev_menu = dev_menu.get_node_or_null("DevMenu")
@@ -207,9 +243,12 @@ func take_photo():
 			was_alive = enemy.hp > 0
 
 		var dmg = calculate_damage(enemy)
+		var is_crit = focus_time / max_focus_time >= 0.99 and randf() < RelicManager.get_crit_bonus()
+		show_damage_number(dmg, enemy.global_position, is_crit)
 		enemy.take_damage(dmg)
 
 		if RelicManager.has_double_shot():
+			show_damage_number(dmg * 0.35, enemy.global_position + Vector2(10, -10), false)
 			enemy.take_damage(dmg * 0.35)
 
 		if was_alive and "hp" in enemy and enemy.hp <= 0:
@@ -233,7 +272,7 @@ func take_photo():
 func calculate_damage(enemy) -> float:
 	var dist = global_position.distance_to(enemy.global_position)
 	var max_r = 160.0
-	var range_mult = RelicManager.get_aim_range_multiplier() * GameManager.get_upgrade_bonus_range()
+	var range_mult = RelicManager.get_aim_range_multiplier() * GameManager.get_upgrade_bonus_range() * GameManager.get_pact_aim_mult()
 	if aim_shape and aim_shape.shape:
 		max_r = aim_shape.shape.radius * range_mult
 	else:
@@ -294,6 +333,7 @@ func get_enemies_in_aim() -> Array:
 	return enemies
 
 func start_reload():
+	play_sfx("res://assets/sounds/wind.wav")
 	RelicManager.on_reload()
 	if RelicManager.is_free_reload():
 		print("Empty Cassette: FREE RELOAD!")
@@ -304,7 +344,7 @@ func start_reload():
 		return
 
 	is_reloading = true
-	var reload_time = FilmManager.get_reload_time() * RelicManager.get_reload_multiplier() * GameManager.get_upgrade_bonus_reload()
+	var reload_time = FilmManager.get_reload_time() * RelicManager.get_reload_multiplier() * GameManager.get_upgrade_bonus_reload() * GameManager.get_pact_reload_mult()
 	reload_timer.start(reload_time)
 	print("Reloading... (", reload_time, "s)")
 
@@ -312,9 +352,13 @@ func _on_reload_timer_timeout():
 	max_film = FilmManager.get_max_frames() + RelicManager.get_extra_frames() + GameManager.get_upgrade_bonus_frames()
 	current_film = max_film
 	is_reloading = false
+	spawn_reload_particles()
 	print("Reloaded!")
 
 func take_damage(amount: int):
+	if is_downed:
+		return
+	AchievementManager.add_damage_taken(amount)
 	var dev_menu = get_tree().get_first_node_in_group("main")
 	if dev_menu:
 		dev_menu = dev_menu.get_node_or_null("DevMenu")
@@ -335,9 +379,82 @@ func take_damage(amount: int):
 
 	hp -= amount
 	if hp <= 0:
-		die()
+		if GameManager.coop_mode:
+			_enter_downed_state()
+		else:
+			die()
+
+func _auto_aim():
+	var nearest = _get_nearest_enemy()
+	if nearest:
+		var dir = global_position.direction_to(nearest.global_position)
+		# Rotate aim visual towards enemy
+		if aim_visual:
+			aim_visual.rotation = dir.angle()
+
+func _try_revive():
+	if not GameManager.coop_mode:
+		return
+	var other = _get_other_player()
+	if other == null or other.is_downed:
+		return
+	var dist = global_position.distance_to(other.global_position)
+	if dist < 80 and Input.is_action_just_pressed("revive"):
+		# Cost: 10 film frames from the reviving player
+		if other.current_film >= 10:
+			other.current_film -= 10
+			other.update_ui()
+			is_downed = false
+			hp = int(max_hp * 0.3)
+			update_ui()
+			print("Player ", player_id, " REVIVED by Player ", other.player_id)
+			# Visual feedback
+			var label = Label.new()
+			label.text = "ВОСКРЕШЁН!"
+			label.position = global_position - Vector2(40, 40)
+			label.add_theme_font_size_override("font_size", 16)
+			label.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4, 1))
+			label.z_index = 200
+			get_tree().current_scene.add_child(label)
+			var tween = get_tree().create_tween()
+			tween.tween_property(label, "modulate:a", 0.0, 1.5)
+			tween.chain().tween_callback(func(): label.queue_free())
+		else:
+			print("Not enough film to revive!")
+
+func _get_other_player() -> Node:
+	var players = get_tree().get_nodes_in_group("player")
+	for p in players:
+		if p != self and p.has_method("take_damage"):
+			return p
+	return null
+
+func _enter_downed_state():
+	is_downed = true
+	downed_timer = max_downed_time
+	set_physics_process(false)
+	# Visual: red tint, pulsing
+	var sprite = get_node_or_null("Sprite2D")
+	if sprite:
+		sprite.modulate = Color(0.5, 0.1, 0.1, 0.7)
+	print("Player ", player_id, " is DOWNED! Revive within ", max_downed_time, " seconds")
+	
+	# Show revive prompt
+	var label = Label.new()
+	label.name = "DownedLabel"
+	label.text = "ИГРОК %d УПАЛ! [R] Воскресить (10 кадров)" % player_id
+	label.position = global_position - Vector2(120, 60)
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", Color(0.9, 0.2, 0.2, 1))
+	label.add_theme_constant_override("outline_size", 3)
+	label.z_index = 200
+	get_tree().current_scene.add_child(label)
 
 func die():
+	# Remove downed label if exists
+	var dl = get_tree().current_scene.get_node_or_null("DownedLabel")
+	if dl:
+		dl.queue_free()
 	if RelicManager.use_death_shot():
 		var nearest = _get_nearest_enemy()
 		if nearest:
@@ -347,16 +464,86 @@ func die():
 
 	print("GAME OVER")
 	died.emit()
-	GameManager.end_run(false)
+	
+	# Show Game Over screen
+	var go = CanvasLayer.new()
+	go.set_script(load("res://scripts/game_over_screen.gd"))
+	go.name = "GameOverScreen"
+	get_tree().current_scene.add_child(go)
+	
+	# Disable player input
+	set_physics_process(false)
+
+func play_sfx(stream_path: String):
+	var sfx = get_node_or_null("SFXPlayer")
+	if sfx == null:
+		return
+	var stream = load(stream_path)
+	if stream:
+		sfx.stream = stream
+		sfx.play()
 
 func flash_screen():
 	if flash_overlay == null:
 		return
 	flash_overlay.visible = true
-	flash_overlay.modulate.a = 0.8
-	await get_tree().create_timer(0.05).timeout
-	if flash_overlay:
-		flash_overlay.visible = false
+	flash_overlay.modulate.a = 0.6
+	flash_overlay.scale = Vector2(1.0, 1.0)
+	
+	var tween = get_tree().create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(flash_overlay, "modulate:a", 0.0, 0.15)
+	tween.tween_property(flash_overlay, "scale", Vector2(1.2, 1.2), 0.15)
+	tween.chain().tween_callback(func(): if flash_overlay: flash_overlay.visible = false)
+	
+	# Local shutter flash at player position
+	spawn_shutter_flash()
+
+func spawn_shutter_flash():
+	var flash = ColorRect.new()
+	flash.color = Color(1.0, 1.0, 0.95, 0.9)
+	flash.size = Vector2(80, 80)
+	flash.position = global_position - Vector2(40, 40)
+	flash.z_index = 100
+	get_tree().current_scene.add_child(flash)
+	
+	var tween = get_tree().create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(flash, "modulate:a", 0.0, 0.12)
+	tween.tween_property(flash, "size", Vector2(200, 200), 0.12)
+	tween.tween_property(flash, "position", flash.position - Vector2(60, 60), 0.12)
+	tween.chain().tween_callback(func(): flash.queue_free())
+
+func show_damage_number(damage: float, pos: Vector2, is_crit: bool = false):
+	var label = Label.new()
+	label.text = "%.0f" % damage
+	label.add_theme_font_size_override("font_size", 18 if not is_crit else 26)
+	label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2, 1.0) if is_crit else Color(1.0, 0.3, 0.1, 1.0))
+	label.add_theme_constant_override("outline_size", 3)
+	label.position = pos - Vector2(20, 30)
+	label.z_index = 150
+	get_tree().current_scene.add_child(label)
+	
+	var tween = get_tree().create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(label, "position:y", label.position.y - 50, 0.6)
+	tween.tween_property(label, "modulate:a", 0.0, 0.6)
+	tween.chain().tween_callback(func(): label.queue_free())
+
+func spawn_reload_particles():
+	for i in range(6):
+		var p = ColorRect.new()
+		p.color = Color(0.2, 0.9, 0.3, 0.8)
+		p.size = Vector2(6, 6)
+		p.position = global_position + Vector2(randf_range(-20, 20), randf_range(-20, 20))
+		p.z_index = 100
+		get_tree().current_scene.add_child(p)
+		
+		var tween = get_tree().create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(p, "position:y", p.position.y - randf_range(30, 60), 0.5)
+		tween.tween_property(p, "modulate:a", 0.0, 0.5)
+		tween.chain().tween_callback(func(): p.queue_free())
 
 func handle_camera_settings():
 	if Input.is_action_just_pressed("ui_1"):

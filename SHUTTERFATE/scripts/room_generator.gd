@@ -108,23 +108,23 @@ func generate_room():
 		if not is_door_east:
 			place_wall(iso_to_screen(grid_width - 1, y) + Vector2(offset_x, offset_y - tile_h * 0.5))
 
-	# Inner obstacles
-	var obstacle_count = randi_range(4, 8)
-	for i in range(obstacle_count):
-		var ox = randi_range(2, grid_width - 3)
-		var oy = randi_range(2, grid_height - 3)
-		if abs(ox - int(half_w)) <= 1 and abs(oy - int(half_h)) <= 1:
-			continue
-		if has_door_west and ox <= 2:
-			continue
-		if has_door_east and ox >= grid_width - 3:
-			continue
-		if has_door_north and oy <= 2:
-			continue
-		if has_door_south and oy >= grid_height - 3:
-			continue
-		var pos = iso_to_screen(ox, oy) + Vector2(offset_x, offset_y - tile_h * 0.5)
-		place_wall(pos)
+	# Inner obstacles disabled — caused player getting stuck
+	# var obstacle_count = randi_range(4, 8)
+	# for i in range(obstacle_count):
+	# 	var ox = randi_range(2, grid_width - 3)
+	# 	var oy = randi_range(2, grid_height - 3)
+	# 	if abs(ox - int(half_w)) <= 1 and abs(oy - int(half_h)) <= 1:
+	# 		continue
+	# 	if has_door_west and ox <= 2:
+	# 		continue
+	# 	if has_door_east and ox >= grid_width - 3:
+	# 		continue
+	# 	if has_door_north and oy <= 2:
+	# 		continue
+	# 	if has_door_south and oy >= grid_height - 3:
+	# 		continue
+	# 	var pos = iso_to_screen(ox, oy) + Vector2(offset_x, offset_y - tile_h * 0.5)
+	# 	place_wall(pos)
 
 func place_wall(pos: Vector2):
 	var wall = StaticBody2D.new()

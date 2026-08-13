@@ -30,7 +30,16 @@ func buy_upgrade(id: String) -> bool:
 	photo_prints -= up.costs[up.level]
 	up.level += 1
 	print("Upgrade purchased: ", up.name, " level ", up.level)
+	_check_all_upgrades_max()
 	return true
+
+func _check_all_upgrades_max():
+	var all_max = true
+	for id in camera_upgrades.keys():
+		if camera_upgrades[id].level < camera_upgrades[id].max:
+			all_max = false
+			break
+	AchievementManager.set_all_upgrades_max(all_max)
 
 # Combined bonuses: camera level + upgrades
 func get_camera_bonus_damage() -> float:
@@ -106,6 +115,59 @@ var run_prints_earned: int = 0
 var current_floor: int = 1
 var current_room: int = 1
 
+# ========== PACT OF PUNISHMENT (Run Modifiers) ==========
+var pacts_unlocked: bool = false
+var run_pacts: Array[String] = []
+var max_pacts: int = 3
+
+const PACTS = {
+	"double_exposure": {
+		"name": "Двойная экспозиция",
+		"desc": "Враги имеют +50% HP. Награда: +50% отпечатков.",
+		"bonus": 0.5,
+		"color": Color(0.9, 0.5, 0.2, 1)
+	},
+	"overexposed": {
+		"name": "Засвеченный кадр",
+		"desc": "Дальность прицела −40%. Награда: +75% отпечатков.",
+		"bonus": 0.75,
+		"color": Color(0.9, 0.9, 0.3, 1)
+	},
+	"fast_rewind": {
+		"name": "Быстрая перемотка",
+		"desc": "Перезарядка в 2 раза дольше. Награда: +100% отпечатков.",
+		"bonus": 1.0,
+		"color": Color(0.3, 0.7, 0.9, 1)
+	},
+	"old_lens": {
+		"name": "Старый объектив",
+		"desc": "Без реликвий. Награда: ×3 отпечатков.",
+		"bonus": 2.0,
+		"color": Color(0.8, 0.3, 0.3, 1)
+	}
+}
+
+func has_pact(id: String) -> bool:
+	return id in run_pacts
+
+func get_pact_hp_mult() -> float:
+	return 1.5 if has_pact("double_exposure") else 1.0
+
+func get_pact_aim_mult() -> float:
+	return 0.6 if has_pact("overexposed") else 1.0
+
+func get_pact_reload_mult() -> float:
+	return 2.0 if has_pact("fast_rewind") else 1.0
+
+func toggle_pact(id: String) -> bool:
+	if id in run_pacts:
+		run_pacts.erase(id)
+		return true
+	if run_pacts.size() >= max_pacts:
+		return false
+	run_pacts.append(id)
+	return true
+
 # Relics
 var owned_relics: Array[String] = ["developer_gloves", "lens_cap", "old_tripod", "red_lamp", "fingerprint"]
 var equipped_relics: Array[String] = ["developer_gloves", "lens_cap"]
@@ -121,7 +183,11 @@ func start_run():
 	current_room = 1
 	# Sync relics to RelicManager
 	RelicManager.owned_relics = owned_relics.duplicate()
-	RelicManager.equipped_relics = equipped_relics.duplicate()
+	# Old Lens: no relics equipped
+	if "old_lens" in run_pacts:
+		RelicManager.equipped_relics = []
+	else:
+		RelicManager.equipped_relics = equipped_relics.duplicate()
 	RelicManager.reset_run()
 	# Relic: Lumiere Card (+1 camera level at start)
 	var cam_bonus = RelicManager.get_camera_level_bonus()
@@ -130,9 +196,32 @@ func start_run():
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 func end_run(success: bool):
+	AchievementManager.set_prints(photo_prints)
+	AchievementManager.set_camera_level(camera_level)
+	AchievementManager.set_relics_owned(owned_relics.size())
+	AchievementManager.set_films_unlocked(unlocked_films.size())
+	AchievementManager.set_max_pacts_run(run_pacts.size())
+	AchievementManager.check_no_damage_run()
+	AchievementManager.check_all()
+	
 	var earned = run_kills * 2 + run_bosses * 50
 	if success:
 		earned += 100
+	# Unlock pacts after reaching floor 15
+	if current_floor >= 15 and not pacts_unlocked:
+		pacts_unlocked = true
+		print("PACTS UNLOCKED!")
+	# Pact bonuses
+	var pact_mult = 1.0
+	if "double_exposure" in run_pacts:
+		pact_mult += 0.5
+	if "overexposed" in run_pacts:
+		pact_mult += 0.75
+	if "fast_rewind" in run_pacts:
+		pact_mult += 1.0
+	if "old_lens" in run_pacts:
+		pact_mult += 2.0
+	earned = int(earned * pact_mult)
 	photo_prints += earned
 	run_prints_earned = earned
 	if not success:
@@ -149,6 +238,7 @@ func end_run(success: bool):
 func add_kill():
 	run_kills += 1
 	total_kills += 1
+	AchievementManager.add_kill()
 
 func add_boss_kill():
 	run_bosses += 1

@@ -102,6 +102,8 @@ func take_damage(amount: float):
 	if sprite:
 		sprite.modulate = Color(1, 0.3, 0.3)
 	flash_timer.start(0.1)
+	spawn_blood()
+	play_sfx("res://assets/sounds/hit.wav")
 	if player:
 		var knockback = global_position.direction_to(player.global_position) * -30
 		global_position += knockback

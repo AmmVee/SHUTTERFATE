@@ -12,6 +12,12 @@ func _input(event):
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		toggle_pause()
 
+func _on_settings():
+	var sm = CanvasLayer.new()
+	sm.set_script(load("res://scripts/settings_menu.gd"))
+	sm.name = "SettingsMenu"
+	add_child(sm)
+
 func toggle_pause():
 	paused = !paused
 	visible = paused

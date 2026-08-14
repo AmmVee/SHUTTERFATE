@@ -20,6 +20,9 @@ config/features=PackedStringArray("4.2", "Forward Plus")
 GameManager="*res://scripts/game_manager.gd"
 FilmManager="*res://scripts/film_manager.gd"
 RelicManager="*res://scripts/relic_manager.gd"
+AchievementManager="*res://scripts/achievement_manager.gd"
+DailyChallengeManager="*res://scripts/daily_challenge_manager.gd"
+SeasonManager="*res://scripts/season_manager.gd"
 
 [display]
 

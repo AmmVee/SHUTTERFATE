@@ -56,6 +56,7 @@ func _ready():
 	var hp_bonus = RelicManager.get_max_hp_bonus()
 	max_hp += GameManager.get_camera_bonus_hp()
 	max_hp += hp_bonus
+	max_hp += RelicManager.get_season_hp_bonus()
 	hp = max_hp
 
 	move_speed *= GameManager.get_upgrade_bonus_speed()
@@ -144,6 +145,9 @@ func _update_blind(delta):
 			print("Blindness faded")
 
 func apply_blind(duration: float):
+	if RelicManager.has_blind_immunity():
+		print("Polarizing Filter: blind immunity!")
+		return
 	is_blinded = true
 	blind_timer = duration
 	if blind_overlay:
@@ -199,6 +203,12 @@ func handle_aiming(delta):
 		var build_rate = FilmManager.get_focus_build_rate()
 		if enemies.size() > 0:
 			focus_time = min(focus_time + delta * build_rate, max_focus_time)
+			# Frosted Glass: slow enemies in aim by 20%
+			var slow_mult = RelicManager.get_aim_slow_enemy()
+			if slow_mult < 1.0:
+				for e in enemies:
+					if is_instance_valid(e) and e.has_method("apply_temp_slow"):
+						e.apply_temp_slow(slow_mult, 0.1)
 		else:
 			focus_time = max(focus_time - delta * 3.0 * build_rate, 0.0)
 	else:
@@ -255,6 +265,10 @@ func take_photo():
 			GameManager.add_kill()
 			kills_this_shot += 1
 			print("Killed ", enemy.name)
+			# Obscura Seed: 20% chance to restore 1 frame on kill
+			if randf() < RelicManager.get_seed_regen_chance():
+				current_film = min(current_film + 1, max_film)
+				print("Obscura Seed: +1 frame restored!")
 
 		if kills_this_shot > 0 and FilmManager.should_heal_on_kill():
 			var heal = FilmManager.get_heal_amount() * kills_this_shot
@@ -309,6 +323,13 @@ func calculate_damage(enemy) -> float:
 	var dmg = base_damage * comp
 	dmg *= GameManager.get_camera_bonus_damage()
 	dmg = FilmManager.calculate_damage_for_enemy(dmg, focus_ratio, exposure, iso_mod, aperture_mod, current_film, enemy)
+	# Beeswax: +15% damage to full HP enemies
+	if "hp" in enemy and enemy.has_method("get_max_hp"):
+		if enemy.hp >= enemy.get_max_hp():
+			dmg *= RelicManager.get_full_hp_bonus()
+	elif "hp" in enemy and "max_hp" in enemy:
+		if enemy.hp >= enemy.max_hp:
+			dmg *= RelicManager.get_full_hp_bonus()
 
 	var dev_menu = get_tree().get_first_node_in_group("main")
 	if dev_menu:

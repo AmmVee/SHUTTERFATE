@@ -168,6 +168,104 @@ func _on_achievements():
 	close_all_panels()
 	create_achievements_ui()
 
+func _on_seasonal_challenge():
+	close_all_panels()
+	create_seasonal_challenge_ui()
+
+func create_seasonal_challenge_ui():
+	var canvas = get_node_or_null("CanvasLayer")
+	if canvas == null:
+		return
+
+	var panel = ColorRect.new()
+	panel.name = "SeasonalChallengePanel"
+	panel.color = Color(0.05, 0.05, 0.08, 0.95)
+	panel.position = Vector2(460, 150)
+	panel.size = Vector2(1000, 600)
+	canvas.add_child(panel)
+
+	var ch = DailyChallengeManager.get_seasonal_challenge()
+
+	var title = Label.new()
+	title.text = "СЕЗОННОЕ ИСПЫТАНИЕ"
+	title.position = Vector2(0, 20)
+	title.size = Vector2(1000, 50)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 32)
+	title.add_theme_color_override("font_color", SeasonManager.get_season_color())
+	title.add_theme_constant_override("outline_size", 4)
+	panel.add_child(title)
+
+	var season_name = Label.new()
+	season_name.text = SeasonManager.get_season_name()
+	season_name.position = Vector2(0, 70)
+	season_name.size = Vector2(1000, 30)
+	season_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	season_name.add_theme_font_size_override("font_size", 16)
+	season_name.add_theme_color_override("font_color", Color(0.6, 0.6, 0.5, 1))
+	panel.add_child(season_name)
+
+	var name_label = Label.new()
+	name_label.text = ch.get("name", "")
+	name_label.position = Vector2(0, 120)
+	name_label.size = Vector2(1000, 40)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.add_theme_font_size_override("font_size", 24)
+	name_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.5, 1))
+	panel.add_child(name_label)
+
+	var desc_label = Label.new()
+	desc_label.text = ch.get("desc", "")
+	desc_label.position = Vector2(100, 180)
+	desc_label.size = Vector2(800, 60)
+	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc_label.add_theme_font_size_override("font_size", 16)
+	desc_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.6, 1))
+	panel.add_child(desc_label)
+
+	var bonus_label = Label.new()
+	bonus_label.text = "Бонус: %d отпечатков" % ch.get("bonus_prints", 0)
+	bonus_label.position = Vector2(0, 260)
+	bonus_label.size = Vector2(1000, 30)
+	bonus_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bonus_label.add_theme_font_size_override("font_size", 18)
+	bonus_label.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4, 1))
+	panel.add_child(bonus_label)
+
+	var status_label = Label.new()
+	var completed = ch.get("completed", false)
+	var best = ch.get("best_score", 0)
+	status_label.text = "Статус: %s | Лучший результат: %d" % ["Выполнено" if completed else "Не выполнено", best]
+	status_label.position = Vector2(0, 310)
+	status_label.size = Vector2(1000, 30)
+	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status_label.add_theme_font_size_override("font_size", 14)
+	status_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+	panel.add_child(status_label)
+
+	var btn_start = Button.new()
+	btn_start.text = "НАЧАТЬ СЕЗОННОЕ ИСПЫТАНИЕ" if not completed else "ПОВТОРИТЬ"
+	btn_start.position = Vector2(300, 400)
+	btn_start.size = Vector2(400, 50)
+	btn_start.add_theme_font_size_override("font_size", 18)
+	btn_start.add_theme_color_override("font_color", SeasonManager.get_season_color())
+	btn_start.pressed.connect(_on_start_seasonal)
+	panel.add_child(btn_start)
+
+	var btn_close = Button.new()
+	btn_close.text = "ЗАКРЫТЬ"
+	btn_close.position = Vector2(350, 20)
+	btn_close.size = Vector2(100, 30)
+	btn_close.add_theme_font_size_override("font_size", 12)
+	btn_close.add_theme_color_override("font_color", Color(0.8, 0.3, 0.3, 1))
+	btn_close.pressed.connect(func(): panel.queue_free())
+	panel.add_child(btn_close)
+
+func _on_start_seasonal():
+	close_all_panels()
+	DailyChallengeManager.seasonal_challenge["completed"] = false
+	GameManager.start_run()
+
 func _on_daily_challenge():
 	close_all_panels()
 	create_daily_challenge_ui()
@@ -390,10 +488,15 @@ func create_achievements_ui():
 
 func _on_settings():
 	close_all_panels()
-	var sm = CanvasLayer.new()
+	var canvas = get_node_or_null("CanvasLayer")
+	if canvas == null:
+		canvas = CanvasLayer.new()
+		canvas.name = "CanvasLayer"
+		add_child(canvas)
+	var sm = Node.new()
 	sm.set_script(load("res://scripts/settings_menu.gd"))
 	sm.name = "SettingsMenu"
-	add_child(sm)
+	canvas.add_child(sm)
 
 func talk_to_npc():
 	if upgrade_panel_open or shop_panel_open or npc_menu_open:
@@ -411,8 +514,8 @@ func create_npc_menu():
 	var panel = ColorRect.new()
 	panel.name = "NPCMenuPanel"
 	panel.color = Color(0.05, 0.05, 0.08, 0.95)
-	panel.position = Vector2(660, 350)
-	panel.size = Vector2(600, 300)
+	panel.position = Vector2(660, 200)
+	panel.size = Vector2(600, 650)
 	canvas.add_child(panel)
 
 	var title = Label.new()
@@ -458,12 +561,21 @@ func create_npc_menu():
 
 	var btn_ach = Button.new()
 	btn_ach.text = "ДОСТИЖЕНИЯ"
-	btn_ach.position = Vector2(btn_x, btn_y + 130)
+	btn_ach.position = Vector2(btn_x, btn_y + 100)
 	btn_ach.size = Vector2(btn_w, btn_h)
 	btn_ach.add_theme_font_size_override("font_size", 16)
 	btn_ach.add_theme_color_override("font_color", Color(0.9, 0.7, 0.2, 1))
 	btn_ach.pressed.connect(_on_achievements)
 	panel.add_child(btn_ach)
+
+	var btn_seasonal = Button.new()
+	btn_seasonal.text = "СЕЗОННОЕ ИСПЫТАНИЕ"
+	btn_seasonal.position = Vector2(btn_x, btn_y + 150)
+	btn_seasonal.size = Vector2(btn_w, btn_h)
+	btn_seasonal.add_theme_font_size_override("font_size", 16)
+	btn_seasonal.add_theme_color_override("font_color", SeasonManager.get_season_color())
+	btn_seasonal.pressed.connect(_on_seasonal_challenge)
+	panel.add_child(btn_seasonal)
 
 	var btn_daily = Button.new()
 	btn_daily.text = "ЕЖЕДНЕВНОЕ ИСПЫТАНИЕ"
@@ -476,7 +588,7 @@ func create_npc_menu():
 
 	var btn_gallery = Button.new()
 	btn_gallery.text = "ГАЛЕРЕЯ (%d)" % GameManager.photo_gallery.size()
-	btn_gallery.position = Vector2(btn_x, btn_y + 270)
+	btn_gallery.position = Vector2(btn_x, btn_y + 250)
 	btn_gallery.size = Vector2(btn_w, btn_h)
 	btn_gallery.add_theme_font_size_override("font_size", 16)
 	btn_gallery.add_theme_color_override("font_color", Color(0.9, 0.5, 0.8, 1))
@@ -485,7 +597,7 @@ func create_npc_menu():
 
 	var btn_coop = Button.new()
 	btn_coop.text = "КООПЕРАТИВ: %s" % ("ВКЛ" if GameManager.coop_mode else "ВЫКЛ")
-	btn_coop.position = Vector2(btn_x, btn_y + 340)
+	btn_coop.position = Vector2(btn_x, btn_y + 300)
 	btn_coop.size = Vector2(btn_w, btn_h)
 	btn_coop.add_theme_font_size_override("font_size", 16)
 	btn_coop.add_theme_color_override("font_color", Color(0.3, 0.9, 0.6, 1) if GameManager.coop_mode else Color(0.5, 0.5, 0.5, 1))
@@ -494,7 +606,7 @@ func create_npc_menu():
 
 	var btn_settings = Button.new()
 	btn_settings.text = "НАСТРОЙКИ"
-	btn_settings.position = Vector2(btn_x, btn_y + 130)
+	btn_settings.position = Vector2(btn_x, btn_y + 350)
 	btn_settings.size = Vector2(btn_w, btn_h)
 	btn_settings.add_theme_font_size_override("font_size", 16)
 	btn_settings.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0, 1))
@@ -503,7 +615,7 @@ func create_npc_menu():
 
 	var btn_close = Button.new()
 	btn_close.text = "УЙТИ"
-	btn_close.position = Vector2(btn_x, btn_y + 480)
+	btn_close.position = Vector2(btn_x, btn_y + 420)
 	btn_close.size = Vector2(btn_w, btn_h)
 	btn_close.add_theme_font_size_override("font_size", 16)
 	btn_close.add_theme_color_override("font_color", Color(0.8, 0.3, 0.3, 1))
@@ -515,11 +627,12 @@ func close_all_panels():
 	if canvas:
 		for child in canvas.get_children():
 			var n = child.name
-			if n == "NPCMenuPanel" or n == "ShopPanel" or n == "UpgradePanel":
+			if n == "NPCMenuPanel" or n == "ShopPanel" or n == "UpgradePanel" or n == "PactPanel" or n == "DailyChallengePanel" or n == "SeasonalChallengePanel" or n == "AchievementsPanel" or n == "SettingsMenu" or n == "PhotoEditor":
 				child.queue_free()
 	npc_menu_open = false
 	shop_panel_open = false
 	upgrade_panel_open = false
+	pact_selector_open = false
 
 func close_npc_menu():
 	close_all_panels()
@@ -764,33 +877,45 @@ func show_hub_ui():
 		canvas.name = "CanvasLayer"
 		add_child(canvas)
 
-	var label = canvas.get_node_or_null("PromptLabel")
-	if label == null:
-		label = Label.new()
-		label.name = "PromptLabel"
-		label.anchors_preset = Control.PRESET_CENTER_BOTTOM
-		label.offset_top = -80
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.add_theme_font_size_override("font_size", 20)
-		label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
-		label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
-		label.add_theme_constant_override("outline_size", 4)
-		label.visible = false
-		canvas.add_child(label)
+	# Season indicator (Stage 8)
+	var season_label = Label.new()
+	season_label.name = "SeasonLabel"
+	season_label.text = "🌿 %s" % SeasonManager.get_season_name()
+	season_label.position = Vector2(20, 20)
+	season_label.size = Vector2(400, 30)
+	season_label.add_theme_font_size_override("font_size", 16)
+	season_label.add_theme_color_override("font_color", SeasonManager.get_season_color())
+	season_label.add_theme_constant_override("outline_size", 3)
+	canvas.add_child(season_label)
 
-	var stats = canvas.get_node_or_null("StatsLabel")
-	if stats == null:
-		stats = Label.new()
-		stats.name = "StatsLabel"
-		stats.position = Vector2(20, 20)
-		stats.add_theme_font_size_override("font_size", 16)
-		stats.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
-		stats.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
-		stats.add_theme_constant_override("outline_size", 3)
-		canvas.add_child(stats)
+	var season_desc = Label.new()
+	season_desc.name = "SeasonDesc"
+	season_desc.text = SeasonManager.current_season.get("desc", "")
+	season_desc.position = Vector2(20, 48)
+	season_desc.size = Vector2(600, 20)
+	season_desc.add_theme_font_size_override("font_size", 11)
+	season_desc.add_theme_color_override("font_color", Color(0.6, 0.6, 0.5, 1))
+	canvas.add_child(season_desc)
 
-	stats.text = "Отпечатки: %d\nСмертей: %d\nУбийств: %d" % [GameManager.photo_prints, GameManager.total_deaths, GameManager.total_kills]
+	var stats = Label.new()
+	stats.name = "StatsLabel"
+	stats.text = "Отпечатки: %d | Убийства: %d | Смерти: %d | Уровень камеры: %d" % [
+		GameManager.photo_prints, GameManager.total_kills, GameManager.total_deaths, GameManager.camera_level
+	]
+	stats.position = Vector2(20, 80)
+	stats.size = Vector2(800, 30)
+	stats.add_theme_font_size_override("font_size", 14)
+	stats.add_theme_color_override("font_color", Color(0.8, 0.8, 0.7, 1))
+	canvas.add_child(stats)
 
+	var floor_label = Label.new()
+	floor_label.name = "FloorLabel"
+	floor_label.text = "Лучший этаж: %d" % GameManager.current_floor
+	floor_label.position = Vector2(20, 105)
+	floor_label.size = Vector2(400, 25)
+	floor_label.add_theme_font_size_override("font_size", 12)
+	floor_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.5, 1))
+	canvas.add_child(floor_label)
 func create_film_selector():
 	var canvas = get_node_or_null("CanvasLayer")
 	if canvas == null:

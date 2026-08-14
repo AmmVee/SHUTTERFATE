@@ -205,9 +205,12 @@ func get_enemy_detect_multiplier() -> float:
 	return 1.0
 
 func get_crit_bonus() -> float:
+	var bonus = 0.0
 	if has_effect("crit_focus"):
-		return 0.2
-	return 0.0
+		bonus += 0.2
+	if "warm_filter" in equipped_relics:
+		bonus += 0.12
+	return bonus
 
 func has_first_hit_null() -> bool:
 	return has_effect("first_hit_null")
@@ -281,6 +284,11 @@ func is_aoe_shot() -> bool:
 		return true
 	return false
 
+func _register_season_relics():
+	for id in SeasonManager.SEASON_RELICS.keys():
+		var data = SeasonManager.SEASON_RELICS[id]
+		_register(id, data["name"], data["desc"], data["flavor"], data["effect"], data["rarity"], data["color"])
+
 func reset_run():
 	reload_counter = 0
 	shot_counter = 0
@@ -316,3 +324,32 @@ func on_first_hit() -> bool:
 		first_hit_taken = true
 		return true
 	return false
+
+
+
+# ========== SEASONAL RELIC EFFECTS (Stage 8) ==========
+
+func has_blind_immunity() -> bool:
+	return "polarizing_filter" in equipped_relics
+
+func get_full_hp_bonus() -> float:
+	return 1.15 if "beeswax" in equipped_relics else 1.0
+
+func get_season_hp_bonus() -> int:
+	return 20 if "thermal_pack" in equipped_relics else 0
+
+func get_seed_regen_chance() -> float:
+	return 0.2 if "obscura_seed" in equipped_relics else 0.0
+
+func get_aim_slow_enemy() -> float:
+	return 0.8 if "frosted_glass" in equipped_relics else 1.0
+
+func get_prints_bonus_percent() -> float:
+	var bonus = 0.0
+	if "golden_frame" in equipped_relics:
+		bonus += 0.20
+	bonus += SeasonManager.get_season_prints_bonus()
+	return bonus
+
+func is_iso_no_noise() -> bool:
+	return "solar_battery" in equipped_relics

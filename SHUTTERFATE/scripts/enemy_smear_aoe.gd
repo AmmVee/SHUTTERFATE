@@ -215,3 +215,17 @@ func _on_flash_timer_timeout():
 func _on_wander_timer_timeout():
 	wander_dir = Vector2(randf_range(-1,1), randf_range(-1,1)).normalized()
 	wander_timer.start(randf_range(1.0, 2.5))
+
+
+func apply_temp_slow(slow_mult: float, duration: float):
+	var original_speed = move_speed
+	move_speed *= slow_mult
+	var timer = get_tree().create_timer(duration)
+	timer.timeout.connect(func():
+		if is_instance_valid(self):
+			move_speed = original_speed
+	)
+
+
+func get_max_hp() -> int:
+	return max_hp

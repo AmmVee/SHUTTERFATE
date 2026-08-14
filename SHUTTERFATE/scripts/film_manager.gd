@@ -172,3 +172,24 @@ func should_heal_on_kill() -> bool:
 
 func get_heal_amount() -> int:
 	return 10
+
+
+func _register_seasonal_films():
+	for film_id in SeasonManager.SEASON_FILMS.keys():
+		var data = SeasonManager.SEASON_FILMS[film_id]
+		var film = FilmData.new()
+		film.film_id = film_id
+		film.display_name = data["name"]
+		film.description = data["desc"]
+		film.max_frames = data["max_frames"]
+		film.rarity = data["rarity"]
+		film.rarity_color = data["rarity_color"]
+		film.special_id = data.get("special_id", "")
+		film.base_damage_mult = data.get("base_damage_mult", 1.0)
+		films[film_id] = film
+
+func is_seasonal_film_unlocked(film_id: String) -> bool:
+	return SeasonManager.has_season_film(film_id)
+
+func unlock_seasonal_film(film_id: String):
+	SeasonManager.unlock_season_film(film_id)

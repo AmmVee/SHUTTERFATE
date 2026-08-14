@@ -337,7 +337,7 @@ func _on_enemy_died():
 		AchievementManager.set_max_floor(GameManager.current_floor)
 	AchievementManager.check_old_lens_floor5(GameManager.current_floor)
 	var room_data = floor_gen.get_current_room_data()
-		room_data["cleared"] = true
+	room_data["cleared"] = true
 
 func unlock_doors():
 	GameManager.photo_prints += 10
@@ -524,8 +524,8 @@ func update_floor_ui():
 		var label = ui.get_node_or_null("FloorLabel")
 		if label and floor_gen:
 			AchievementManager.set_max_floor(GameManager.current_floor)
-	AchievementManager.check_old_lens_floor5(GameManager.current_floor)
-	var room_data = floor_gen.get_current_room_data()
+			AchievementManager.check_old_lens_floor5(GameManager.current_floor)
+			var room_data = floor_gen.get_current_room_data()
 			var room_type = room_data.get("type", "combat")
 			var type_names = {"start": "Старт", "combat": "Бой", "elite": "Элита", "boss": "БОСС", "treasure": "Сокровище"}
 			var type_str = type_names.get(room_type, "Бой")
@@ -541,3 +541,19 @@ func _physics_process(delta):
 			var center = floor_gen.get_room_center(floor_gen.current_room_pos)
 			if center != Vector2.ZERO:
 				player.global_position = center
+
+
+func spawn_trap_room(room):
+	print("Trap room not implemented yet")
+
+func spawn_puzzle_room(room):
+	print("Puzzle room not implemented yet")
+
+func spawn_rest_room(room):
+	print("Rest room not implemented yet")
+
+func spawn_miniboss_room(room):
+	print("Miniboss room not implemented yet")
+
+func spawn_gallery_room(room):
+	print("Gallery room not implemented yet")

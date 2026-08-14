@@ -4,6 +4,8 @@ var photo_prints: int = 0
 var total_deaths: int = 0
 var total_kills: int = 0
 var camera_level: int = 1
+var photo_gallery: Array[Dictionary] = []
+var coop_mode: bool = false
 var unlocked_films: Array = ["obskura"]
 
 # ========== CAMERA UPGRADE SYSTEM (Meta-Progression) ==========
@@ -181,6 +183,8 @@ func start_run():
 	run_prints_earned = 0
 	current_floor = 1
 	current_room = 1
+	# Reset seasonal challenge tracking
+	DailyChallengeManager.seasonal_challenge["completed"] = false
 	# Sync relics to RelicManager
 	RelicManager.owned_relics = owned_relics.duplicate()
 	# Old Lens: no relics equipped
@@ -207,6 +211,9 @@ func end_run(success: bool):
 	var earned = run_kills * 2 + run_bosses * 50
 	if success:
 		earned += 100
+	# Seasonal prints bonus
+	var season_bonus = RelicManager.get_prints_bonus_percent()
+	earned = int(earned * (1.0 + season_bonus))
 	# Unlock pacts after reaching floor 15
 	if current_floor >= 15 and not pacts_unlocked:
 		pacts_unlocked = true

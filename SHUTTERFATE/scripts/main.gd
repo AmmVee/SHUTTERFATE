@@ -8,6 +8,8 @@ extends Node2D
 
 var floor_gen: Node2D = null
 var enemies_alive: int = 0
+var puzzle_active: bool = false
+var current_puzzle_object: Node = null
 var current_room_enemies: Array = []
 var door_nodes: Array = []
 var exit_node: Area2D = null
@@ -55,6 +57,8 @@ func _ready():
 		print("Pause menu loaded (ESC)")
 
 func generate_floor():
+	current_puzzle_object = null
+	puzzle_active = false
 	_cleanup_room()
 
 	floor_gen = Node2D.new()
@@ -106,8 +110,6 @@ func enter_current_room():
 		exit_node.queue_free()
 	exit_node = null
 
-	AchievementManager.set_max_floor(GameManager.current_floor)
-	AchievementManager.check_old_lens_floor5(GameManager.current_floor)
 	var room_data = floor_gen.get_current_room_data()
 	var room_type = room_data.get("type", "combat")
 	var room = floor_gen.get_current_room()
@@ -156,6 +158,10 @@ func enter_current_room():
 		create_exit(room)
 
 	if room_type == "treasure":
+		room_data["cleared"] = true
+		unlock_doors()
+
+	if room_type == "trap":
 		room_data["cleared"] = true
 		unlock_doors()
 
@@ -334,10 +340,8 @@ func _on_enemy_died():
 	enemies_alive = max(enemies_alive - 1, 0)
 	if enemies_alive <= 0:
 		unlock_doors()
-		AchievementManager.set_max_floor(GameManager.current_floor)
-	AchievementManager.check_old_lens_floor5(GameManager.current_floor)
-	var room_data = floor_gen.get_current_room_data()
-	room_data["cleared"] = true
+		var room_data = floor_gen.get_current_room_data()
+		room_data["cleared"] = true
 
 func unlock_doors():
 	GameManager.photo_prints += 10
@@ -513,9 +517,13 @@ func _on_exit_entered(body):
 	call_deferred("next_floor")
 
 func next_floor():
+	current_puzzle_object = null
+	puzzle_active = false
 	GameManager.current_floor += 1
 	GameManager.current_room = 1
 	print("=== NEW FLOOR: ", GameManager.current_floor, " ===")
+	AchievementManager.set_max_floor(GameManager.current_floor)
+	AchievementManager.check_old_lens_floor5(GameManager.current_floor)
 	generate_floor()
 
 func update_floor_ui():
@@ -523,11 +531,9 @@ func update_floor_ui():
 	if ui:
 		var label = ui.get_node_or_null("FloorLabel")
 		if label and floor_gen:
-			AchievementManager.set_max_floor(GameManager.current_floor)
-			AchievementManager.check_old_lens_floor5(GameManager.current_floor)
 			var room_data = floor_gen.get_current_room_data()
 			var room_type = room_data.get("type", "combat")
-			var type_names = {"start": "Старт", "combat": "Бой", "elite": "Элита", "boss": "БОСС", "treasure": "Сокровище"}
+			var type_names = {"start": "Старт", "combat": "Бой", "elite": "Элита", "boss": "БОСС", "treasure": "Сокровище", "trap": "Ловушка", "puzzle": "Головоломка", "rest": "Отдых", "miniboss": "Минибосс", "gallery": "Галерея"}
 			var type_str = type_names.get(room_type, "Бой")
 			label.text = "Этаж: %d | %s" % [GameManager.current_floor, type_str]
 
@@ -544,16 +550,210 @@ func _physics_process(delta):
 
 
 func spawn_trap_room(room):
-	print("Trap room not implemented yet")
+	print("TRAP ROOM")
+	if room == null:
+		return
+	for i in range(randi_range(2, 3)):
+		var trap = Area2D.new()
+		var pos = room.global_position + room.get_random_floor_position(3)
+		trap.global_position = pos
+		var sprite = Sprite2D.new()
+		sprite.texture = load("res://assets/floor_iso.png")
+		sprite.modulate = Color(1.0, 0.2, 0.2, 0.8)
+		sprite.scale = Vector2(0.8, 0.8)
+		trap.add_child(sprite)
+		var coll = CollisionShape2D.new()
+		coll.shape = RectangleShape2D.new()
+		coll.shape.size = Vector2(40, 40)
+		trap.add_child(coll)
+		trap.body_entered.connect(_on_trap_entered.bind(trap))
+		add_child(trap)
+	var room_data = floor_gen.get_current_room_data()
+	room_data["cleared"] = true
+	unlock_doors()
 
 func spawn_puzzle_room(room):
-	print("Puzzle room not implemented yet")
+	print("PUZZLE ROOM")
+	if room == null:
+		return
+	var puzzle = Area2D.new()
+	puzzle.set_meta("solved", false)
+	var pos = room.global_position + room.get_center()
+	if room.has_method("is_position_inside_floor") and not room.is_position_inside_floor(pos):
+		pos = room.global_position + room.get_random_floor_position(3)
+	puzzle.global_position = pos
+	var sprite = Sprite2D.new()
+	sprite.texture = load("res://assets/floor_iso.png")
+	sprite.modulate = Color(0.2, 0.7, 1.0, 1.0)
+	sprite.scale = Vector2(1.2, 1.2)
+	puzzle.add_child(sprite)
+	var coll = CollisionShape2D.new()
+	coll.shape = RectangleShape2D.new()
+	coll.shape.size = Vector2(50, 50)
+	puzzle.add_child(coll)
+	var label = Label.new()
+	label.name = "Label"
+	label.text = "[E] Головоломка"
+	label.position = Vector2(-50, -50)
+	label.add_theme_font_size_override("font_size", 12)
+	label.add_theme_color_override("font_color", Color(0.2, 0.8, 1.0, 1))
+	puzzle.add_child(label)
+	puzzle.body_entered.connect(_on_puzzle_area_entered.bind(puzzle))
+	puzzle.body_exited.connect(_on_puzzle_area_exited.bind(puzzle))
+	add_child(puzzle)
+	current_puzzle_object = puzzle
 
 func spawn_rest_room(room):
-	print("Rest room not implemented yet")
+	print("REST ROOM")
+	if room == null:
+		return
+	var rest = Area2D.new()
+	rest.set_meta("used", false)
+	var pos = room.global_position + room.get_center()
+	if room.has_method("is_position_inside_floor") and not room.is_position_inside_floor(pos):
+		pos = room.global_position + room.get_random_floor_position(3)
+	rest.global_position = pos
+	var sprite = Sprite2D.new()
+	sprite.texture = load("res://assets/floor_iso.png")
+	sprite.modulate = Color(0.2, 1.0, 0.3, 1.0)
+	sprite.scale = Vector2(1.2, 1.2)
+	rest.add_child(sprite)
+	var coll = CollisionShape2D.new()
+	coll.shape = RectangleShape2D.new()
+	coll.shape.size = Vector2(50, 50)
+	rest.add_child(coll)
+	var label = Label.new()
+	label.text = "[E] Отдохнуть"
+	label.position = Vector2(-50, -50)
+	label.add_theme_font_size_override("font_size", 12)
+	label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.3, 1))
+	rest.add_child(label)
+	rest.body_entered.connect(_on_rest_entered.bind(rest))
+	add_child(rest)
 
 func spawn_miniboss_room(room):
-	print("Miniboss room not implemented yet")
+	print("MINIBOSS ROOM")
+	if room == null:
+		return
+	var spawn_pos = room.global_position + room.get_center()
+	if room.has_method("is_position_inside_floor") and not room.is_position_inside_floor(spawn_pos):
+		spawn_pos = room.global_position + room.get_random_floor_position(3)
+	var scene = _pick_enemy_scene()
+	if scene == null:
+		print("ERROR: no enemy scene for miniboss")
+		return
+	var enemy = scene.instantiate()
+	enemy.global_position = spawn_pos
+	enemy.is_elite = true
+	enemy.max_hp = int(enemy.max_hp * 2.5)
+	enemy.hp = enemy.max_hp
+	enemy.attack_damage = int(enemy.attack_damage * 1.5)
+	if enemy.has_node("Sprite2D"):
+		enemy.get_node("Sprite2D").modulate = Color(1.0, 0.2, 0.2, 1.0)
+		enemy.get_node("Sprite2D").scale *= 1.5
+	add_child(enemy)
+	current_room_enemies.append(enemy)
+	enemies_alive += 1
+	enemy.tree_exited.connect(_on_enemy_died)
+	print("MINIBOSS spawned")
 
 func spawn_gallery_room(room):
-	print("Gallery room not implemented yet")
+	print("GALLERY ROOM")
+	if room == null:
+		return
+	for i in range(2):
+		spawn_enemy_in_room(room, 1)
+	var chest = Area2D.new()
+	var chest_pos = room.global_position + room.get_random_floor_position(3)
+	chest.global_position = chest_pos
+	var sprite = Sprite2D.new()
+	sprite.name = "Sprite2D"
+	sprite.texture = load("res://assets/floor_iso.png")
+	sprite.modulate = Color(1.0, 0.85, 0.2, 1.0)
+	sprite.scale = Vector2(1.2, 1.2)
+	chest.add_child(sprite)
+	var coll = CollisionShape2D.new()
+	coll.shape = RectangleShape2D.new()
+	coll.shape.size = Vector2(50, 50)
+	chest.add_child(coll)
+	var label = Label.new()
+	label.name = "Label"
+	label.text = "[E] Открыть"
+	label.position = Vector2(-40, -50)
+	label.add_theme_font_size_override("font_size", 12)
+	label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3, 1))
+	label.add_theme_constant_override("outline_size", 2)
+	chest.add_child(label)
+	add_child(chest)
+	print("Gallery chest spawned")
+
+func _on_trap_entered(body, trap):
+	if not body.is_in_group("player"):
+		return
+	if body.has_method("take_damage"):
+		body.take_damage(5)
+		print("Trap hit! -5 HP")
+	var sprite = trap.get_node_or_null("Sprite2D")
+	if sprite:
+		sprite.modulate = Color(1.0, 0.5, 0.5, 0.4)
+
+func _on_puzzle_area_entered(body, puzzle):
+	if not body.is_in_group("player"):
+		return
+	pass
+
+func _on_puzzle_area_exited(body, puzzle):
+	if not body.is_in_group("player"):
+		return
+	pass
+
+func _open_puzzle_ui(puzzle_obj):
+	if puzzle_active:
+		return
+	if puzzle_obj.get_meta("solved", false):
+		return
+	puzzle_active = true
+	var ui = load("res://scripts/puzzle_ui.gd").new()
+	ui.puzzle_solved.connect(_on_puzzle_solved.bind(puzzle_obj))
+	ui.puzzle_cancelled.connect(_on_puzzle_cancelled)
+	add_child(ui)
+
+func _on_puzzle_solved(puzzle_obj):
+	puzzle_active = false
+	puzzle_obj.set_meta("solved", true)
+	var label = puzzle_obj.get_node_or_null("Label")
+	if label:
+		label.text = "РЕШЕНО!"
+		label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.3, 1))
+	var sprite = puzzle_obj.get_node_or_null("Sprite2D")
+	if sprite:
+		sprite.modulate = Color(0.2, 1.0, 0.3, 1.0)
+	GameManager.photo_prints += 25
+	AchievementManager.check_all()
+	var room_data = floor_gen.get_current_room_data()
+	room_data["cleared"] = true
+	unlock_doors()
+	print("Puzzle solved! +25 prints")
+
+func _on_puzzle_cancelled():
+	puzzle_active = false
+	print("Puzzle cancelled")
+
+func _on_rest_entered(body, rest):
+	if not body.is_in_group("player"):
+		return
+	if rest.get_meta("used", false):
+		return
+	rest.set_meta("used", true)
+	if "hp" in body and "max_hp" in body:
+		body.hp = min(body.hp + 30, body.max_hp)
+		if body.has_method("update_ui"):
+			body.update_ui()
+	var label = rest.get_node_or_null("Label")
+	if label:
+		label.text = "ВОССТАНОВЛЕНО"
+		label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.3, 1))
+	print("Rest: +30 HP")
+	var room_data = floor_gen.get_current_room_data()
+	room_data["cleared"] = true
+	unlock_doors()

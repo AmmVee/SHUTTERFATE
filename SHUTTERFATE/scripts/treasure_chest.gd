@@ -2,17 +2,19 @@ extends Area2D
 
 var opened: bool = false
 var player_near: bool = false
-@onready var label: Label = $Label
-@onready var sprite: Sprite2D = $Sprite2D
+var label: Label = null
+var sprite: Sprite2D = null
 
 func _ready():
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
+	label = get_node_or_null("Label")
+	sprite = get_node_or_null("Sprite2D")
 	if label:
 		label.visible = false
 
 func _physics_process(_delta):
-	if player_near and not opened and Input.is_action_just_pressed("ui_accept"):
+	if player_near and not opened and (Input.is_action_just_pressed("ui_accept") or Input.is_key_pressed(KEY_E)):
 		open_chest()
 
 func _on_body_entered(body):

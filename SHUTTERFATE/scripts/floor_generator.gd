@@ -20,6 +20,20 @@ const ROOM_GALLERY = "gallery"
 func _ready():
 	generate_floor()
 
+func _get_room_color(room_type: String) -> Color:
+	match room_type:
+		ROOM_START: return Color(0.8, 0.9, 0.8, 0.5)
+		ROOM_COMBAT: return Color(1.0, 1.0, 1.0, 0.5)
+		ROOM_ELITE: return Color(1.0, 0.7, 0.5, 0.5)
+		ROOM_BOSS: return Color(1.0, 0.3, 0.3, 0.5)
+		ROOM_TREASURE: return Color(1.0, 0.85, 0.2, 0.5)
+		ROOM_TRAP: return Color(0.7, 0.3, 0.3, 0.5)
+		ROOM_PUZZLE: return Color(0.3, 0.6, 1.0, 0.5)
+		ROOM_REST: return Color(0.3, 1.0, 0.5, 0.5)
+		ROOM_MINIBOSS: return Color(1.0, 0.4, 0.6, 0.5)
+		ROOM_GALLERY: return Color(0.8, 0.4, 1.0, 0.5)
+		_: return Color(1.0, 1.0, 1.0, 0.5)
+
 func generate_floor():
 	for inst in room_instances.values():
 		if is_instance_valid(inst):

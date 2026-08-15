@@ -13,6 +13,7 @@ var has_door_north: bool = false
 var has_door_south: bool = false
 var is_safe_room: bool = false
 var room_cleared: bool = false
+@export var floor_tint: Color = Color(1, 1, 1, 0.5)
 
 func _ready():
 	y_sort_enabled = true
@@ -146,5 +147,5 @@ func place_floor(pos: Vector2):
 	tile.texture = load("res://assets/floor_iso.png")
 	tile.position = pos
 	tile.z_index = -100
-	tile.modulate = Color(1, 1, 1, 0.5)
+	tile.modulate = floor_tint
 	add_child(tile)

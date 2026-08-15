@@ -230,7 +230,7 @@ func unlock(id: String):
 
 func _show_popup(name: String, desc: String, reward: String):
 	var popup = CanvasLayer.new()
-	popup.z_index = 1000
+	popup.layer = 100
 
 	var panel = ColorRect.new()
 	panel.color = Color(0.05, 0.05, 0.08, 0.95)
@@ -270,7 +270,10 @@ func _show_popup(name: String, desc: String, reward: String):
 
 	var tween = get_tree().create_tween()
 	tween.tween_property(panel, "modulate:a", 0.0, 0.5).set_delay(3.0)
-	tween.chain().tween_callback(func(): popup.queue_free())
+	tween.chain().tween_callback(func():
+		if is_instance_valid(popup):
+			popup.queue_free()
+	)
 
 # Progress setters
 func add_shot():

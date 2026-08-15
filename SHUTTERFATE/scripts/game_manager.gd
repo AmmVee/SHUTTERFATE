@@ -8,6 +8,7 @@ var photo_gallery: Array[Dictionary] = []
 var coop_mode: bool = false
 var unlocked_films: Array = ["obskura"]
 
+
 # ========== CAMERA UPGRADE SYSTEM (Meta-Progression) ==========
 var camera_upgrades = {
 	"damage": {"level": 0, "max": 5, "costs": [50, 100, 200, 400, 800], "name": "Усиленный объектив", "desc": "+5% базового урона"},

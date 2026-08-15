@@ -80,6 +80,10 @@ func _register_films():
 	xpro.rarity = "red"
 	xpro.rarity_color = Color(1.0, 0.25, 0.2, 1)
 	xpro.special_id = "random_roll"
+	xpro.aim_shape = "beam"
+	xpro.aim_radius = 120.0
+	xpro.aim_width = 220.0
+	xpro.aim_height = 60.0
 	films["xpro"] = xpro
 
 	# === КАДР НОЛЬ | Золотая | Урон = HP босса × 0.75 ===
@@ -193,3 +197,13 @@ func is_seasonal_film_unlocked(film_id: String) -> bool:
 
 func unlock_seasonal_film(film_id: String):
 	SeasonManager.unlock_season_film(film_id)
+
+func get_aim_params() -> Dictionary:
+	if current_film == null:
+		return {"shape": "circle", "radius": 120.0, "width": 240.0, "height": 240.0}
+	return {
+		"shape": current_film.aim_shape,
+		"radius": current_film.aim_radius,
+		"width": current_film.aim_width,
+		"height": current_film.aim_height
+	}

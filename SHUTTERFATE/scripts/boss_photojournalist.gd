@@ -86,7 +86,7 @@ func _physics_process(delta):
 			_process_phase_one(delta)
 		Phase.TWO:
 			_process_phase_two(delta)
-	_check_dodge_condition()
+	_check_dodge()
 
 # ========== PHASE 1 ==========
 func _start_phase_one():
@@ -235,7 +235,7 @@ func _create_flash_ring():
 	tween.tween_callback(ring.queue_free)
 
 # ========== DODGE ==========
-func _check_dodge_condition():
+func _check_dodge():
 	if player == null or not is_instance_valid(self):
 		return
 	# If player is aiming at us and we're in aim area, chance to dodge

@@ -1,4 +1,4 @@
-extends Node
+extends Control
 
 var snapshot_data: Dictionary = {}
 var selected_filter: String = "none"

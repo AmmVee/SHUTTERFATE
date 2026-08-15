@@ -213,3 +213,10 @@ func get_max_hp() -> int:
 
 func spawn_blood():
 	pass
+
+func play_sfx(stream_path: String):
+	var sfx = AudioStreamPlayer.new()
+	sfx.stream = load(stream_path)
+	add_child(sfx)
+	sfx.play()
+	sfx.finished.connect(func(): sfx.queue_free())

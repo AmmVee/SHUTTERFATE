@@ -3,20 +3,32 @@ extends CanvasLayer
 var next_floor: bool = false
 
 func _ready():
-    z_index = 500
+    layer = 100
     show_victory()
 
 func show_victory():
     var bg = ColorRect.new()
     bg.color = Color(0.02, 0.03, 0.01, 0.92)
-    bg.size = Vector2(1920, 1080)
-    bg.position = Vector2(-960, -540)
+    bg.anchor_left = 0.0
+    bg.anchor_top = 0.0
+    bg.anchor_right = 1.0
+    bg.anchor_bottom = 1.0
+    bg.offset_left = 0
+    bg.offset_top = 0
+    bg.offset_right = 0
+    bg.offset_bottom = 0
     add_child(bg)
 
     var vbox = VBoxContainer.new()
     vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-    vbox.size = Vector2(600, 500)
-    vbox.position = Vector2(660, 200)
+    vbox.anchor_left = 0.5
+    vbox.anchor_top = 0.5
+    vbox.anchor_right = 0.5
+    vbox.anchor_bottom = 0.5
+    vbox.offset_left = -300
+    vbox.offset_top = -250
+    vbox.offset_right = 300
+    vbox.offset_bottom = 250
     add_child(vbox)
 
     var title = Label.new()
@@ -66,9 +78,9 @@ func show_victory():
     btn_hub.pressed.connect(_on_return_hub)
     vbox.add_child(btn_hub)
 
-    modulate.a = 0.0
+    bg.modulate.a = 0.0
     var tween = get_tree().create_tween()
-    tween.tween_property(self, "modulate:a", 1.0, 0.5)
+    tween.tween_property(bg, "modulate:a", 1.0, 0.5)
 
 func _on_next_floor():
     GameManager.current_floor += 1

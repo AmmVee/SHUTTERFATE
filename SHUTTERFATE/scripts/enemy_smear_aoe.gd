@@ -143,13 +143,15 @@ func _explode():
 	area.add_child(shape)
 	get_tree().current_scene.add_child(area)
 
-	await get_tree().process_frame
-	var bodies = area.get_overlapping_bodies()
-	for b in bodies:
-		if b.is_in_group("player") and b.has_method("take_damage"):
-			b.take_damage(explosion_damage)
-			print("Explosion hit player for ", explosion_damage)
-	area.queue_free()
+	var timer = get_tree().create_timer(0.05)
+	timer.timeout.connect(func():
+		var bodies = area.get_overlapping_bodies()
+		for b in bodies:
+			if b.is_in_group("player") and b.has_method("take_damage"):
+				b.take_damage(explosion_damage)
+				print("Explosion hit player for ", explosion_damage)
+		area.queue_free()
+	)
 
 func _drop_relic():
 	var roll = randf()

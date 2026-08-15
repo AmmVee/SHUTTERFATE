@@ -15,3 +15,7 @@ class_name FilmData
 @export var special_id: String = ""
 @export var rarity: String = "white"  # white, green, blue, purple, yellow, red, gold
 @export var rarity_color: Color = Color.WHITE
+@export var aim_radius: float = 120.0
+@export var aim_shape: String = "circle"  # "circle" or "rect"
+@export var aim_width: float = 240.0
+@export var aim_height: float = 240.0

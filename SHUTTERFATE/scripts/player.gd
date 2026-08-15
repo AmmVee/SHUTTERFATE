@@ -33,7 +33,8 @@ var blind_overlay: ColorRect = null
 var aim_area: Area2D
 var aim_shape: CollisionShape2D
 var reload_timer: Timer
-var aim_visual: Panel
+var aim_visual: Node2D
+var film_aim_params: Dictionary = {}
 var flash_overlay: ColorRect
 
 var focus_bar: ProgressBar
@@ -73,6 +74,10 @@ func _ready():
 			if aim_shape.shape == null:
 				aim_shape.shape = CircleShape2D.new()
 				aim_shape.shape.radius = 160.0
+			
+			# Load film aim params
+			film_aim_params = FilmManager.get_aim_params()
+			_update_aim_shape()
 
 	reload_timer = get_node_or_null("ReloadTimer")
 	if reload_timer == null:
@@ -91,7 +96,19 @@ func _ready():
 
 	var canvas = get_node_or_null("CanvasLayer")
 	if canvas:
-		aim_visual = canvas.get_node_or_null("AimVisual")
+		# Remove old Panel AimVisual if exists
+		var old_aim = canvas.get_node_or_null("AimVisual")
+		if old_aim:
+			old_aim.queue_free()
+		
+		# Create new Node2D AimVisual as child of player (not canvas)
+		aim_visual = get_node_or_null("AimVisual")
+		if aim_visual == null:
+			aim_visual = Node2D.new()
+			aim_visual.name = "AimVisual"
+			aim_visual.z_index = 100
+			add_child(aim_visual)
+		
 		flash_overlay = canvas.get_node_or_null("FlashOverlay")
 		var ui = canvas.get_node_or_null("UI")
 		if ui:
@@ -191,11 +208,42 @@ func handle_aiming(delta):
 
 	if Input.is_action_pressed("aim"):
 		is_aiming = true
+		
+		# Update aim params from current film
+		film_aim_params = FilmManager.get_aim_params()
+		_update_aim_shape()
+		
+		# Move aim to cursor (world space)
 		if aim_area:
 			aim_area.monitoring = true
+			aim_area.global_position = get_global_mouse_position()
+		
+		# Move aim visual to cursor (screen space)
 		if aim_visual:
 			aim_visual.visible = true
-
+			var mouse_screen = get_viewport().get_mouse_position()
+			var ap = film_aim_params
+			if ap.get("shape", "circle") == "rect":
+				aim_visual.size = Vector2(ap.get("width", 200), ap.get("height", 140))
+			else:
+				aim_visual.size = Vector2(ap.get("radius", 120) * 2, ap.get("radius", 120) * 2)
+			aim_visual.position = mouse_screen - aim_visual.size / 2
+			# Style: circle = rounded, rect = square
+			var style = StyleBoxFlat.new()
+			style.bg_color = Color(1, 1, 1, 0)
+			style.border_color = Color(1, 1, 1, 0.7)
+			style.border_width_left = 2
+			style.border_width_top = 2
+			style.border_width_right = 2
+			style.border_width_bottom = 2
+			if ap.get("shape", "circle") == "circle":
+				var r = aim_visual.size.x / 2
+				style.corner_radius_top_left = r
+				style.corner_radius_top_right = r
+				style.corner_radius_bottom_left = r
+				style.corner_radius_bottom_right = r
+			aim_visual.add_theme_stylebox_override("panel", style)
+		
 		if RelicManager.has_effect("slow_time_20"):
 			Engine.time_scale = RelicManager.get_time_scale()
 
@@ -215,6 +263,7 @@ func handle_aiming(delta):
 		is_aiming = false
 		if aim_area:
 			aim_area.monitoring = false
+			aim_area.position = Vector2.ZERO
 		if aim_visual:
 			aim_visual.visible = false
 			aim_visual.scale = Vector2(1, 1)
@@ -283,12 +332,94 @@ func take_photo():
 	if current_film <= 0:
 		start_reload()
 
+func _update_aim_shape():
+	if aim_shape == null:
+		return
+	var ap = FilmManager.get_aim_params()
+	film_aim_params = ap
+	if ap.get("shape", "circle") == "rect":
+		var rect = RectangleShape2D.new()
+		rect.size = Vector2(ap.get("width", 200), ap.get("height", 140))
+		aim_shape.shape = rect
+	else:
+		var circ = CircleShape2D.new()
+		circ.radius = ap.get("radius", 120)
+		aim_shape.shape = circ
+
+func _draw_aim():
+	if aim_visual == null or not is_aiming:
+		return
+	var ap = FilmManager.get_aim_params()
+	var shape = ap.get("shape", "circle")
+	var radius = ap.get("radius", 120)
+	var width = ap.get("width", 200)
+	var height = ap.get("height", 140)
+	var color = Color(1, 1, 1, 0.3)
+	var line_color = Color(1, 1, 1, 0.8)
+	
+	match shape:
+		"circle":
+			# Circle in front of player
+			aim_visual.draw_circle(Vector2(radius, 0), radius, color)
+			aim_visual.draw_arc(Vector2(radius, 0), radius, 0, TAU, 32, line_color, 2)
+		"cone":
+			# Triangle cone
+			var pts = PackedVector2Array([
+				Vector2.ZERO,
+				Vector2(radius, -radius * 0.4),
+				Vector2(radius, radius * 0.4)
+			])
+			aim_visual.draw_colored_polygon(pts, color)
+			aim_visual.draw_polyline(pts, line_color, 2)
+			aim_visual.draw_line(Vector2.ZERO, Vector2(radius, -radius * 0.4), line_color, 2)
+			aim_visual.draw_line(Vector2.ZERO, Vector2(radius, radius * 0.4), line_color, 2)
+		"beam":
+			# Narrow rectangle beam
+			var pts = PackedVector2Array([
+				Vector2(0, -height * 0.15),
+				Vector2(width, -height * 0.15),
+				Vector2(width, height * 0.15),
+				Vector2(0, height * 0.15)
+			])
+			aim_visual.draw_colored_polygon(pts, color)
+			aim_visual.draw_polyline(pts, line_color, 2)
+			aim_visual.draw_line(Vector2(0, -height * 0.15), Vector2(0, height * 0.15), line_color, 2)
+		"sector":
+			# Wide arc sector
+			var arc_pts = PackedVector2Array([Vector2.ZERO])
+			var steps = 16
+			var angle = PI * 0.4
+			for i in range(steps + 1):
+				var a = -angle / 2 + angle * i / steps
+				arc_pts.append(Vector2(cos(a), sin(a)) * radius)
+			aim_visual.draw_colored_polygon(arc_pts, color)
+			for i in range(arc_pts.size() - 1):
+				aim_visual.draw_line(arc_pts[i], arc_pts[i + 1], line_color, 2)
+		"aoe":
+			# Circle around player
+			aim_visual.draw_circle(Vector2.ZERO, radius, color)
+			aim_visual.draw_arc(Vector2.ZERO, radius, 0, TAU, 32, line_color, 2)
+		"sniper":
+			# Crosshair lines
+			var r = radius
+			aim_visual.draw_line(Vector2(r, -r * 0.3), Vector2(r, r * 0.3), line_color, 2)
+			aim_visual.draw_line(Vector2(r * 0.7, 0), Vector2(r * 1.3, 0), line_color, 2)
+			aim_visual.draw_circle(Vector2(r, 0), 4, line_color)
+		_:
+			aim_visual.draw_circle(Vector2(radius, 0), radius, color)
+			aim_visual.draw_arc(Vector2(radius, 0), radius, 0, TAU, 32, line_color, 2)
+
 func calculate_damage(enemy) -> float:
 	var dist = global_position.distance_to(enemy.global_position)
 	var max_r = 160.0
 	var range_mult = RelicManager.get_aim_range_multiplier() * GameManager.get_upgrade_bonus_range() * GameManager.get_pact_aim_mult()
 	if aim_shape and aim_shape.shape:
-		max_r = aim_shape.shape.radius * range_mult
+		if aim_shape.shape is CircleShape2D:
+			max_r = aim_shape.shape.radius * range_mult
+		elif aim_shape.shape is RectangleShape2D:
+			max_r = aim_shape.shape.size.x * 0.5 * range_mult
+		else:
+			max_r = 160.0 * range_mult
 	else:
 		max_r = 160.0 * range_mult
 
@@ -618,4 +749,10 @@ func update_ui():
 		film_label.text = txt
 	if params_label:
 		var film_name = FilmManager.current_film.display_name if FilmManager.current_film else "None"
-		params_label.text = "f/%.1f | 1/%.0f | ISO %d | %.0fmm | %s" % [aperture, shutter_speed, iso, focal_length, film_name]
+		var ap_ui = FilmManager.get_aim_params()
+		var aim_desc = ap_ui.get("shape", "circle")
+		var aim_size = ap_ui.get("radius", 120)
+		match aim_desc:
+			"beam", "sniper": aim_size = ap_ui.get("width", 200)
+			"aoe": aim_size = ap_ui.get("radius", 100)
+		params_label.text = "f/%.1f | 1/%.0f | ISO %d | %.0fmm | %s\nПринты: %d | Прицел: %s (%d)" % [aperture, shutter_speed, iso, focal_length, film_name, GameManager.photo_prints, aim_desc, aim_size]

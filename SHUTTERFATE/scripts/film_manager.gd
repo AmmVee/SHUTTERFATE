@@ -27,6 +27,8 @@ func _register_films():
 	chroma.rarity = "green"
 	chroma.rarity_color = Color(0.18, 0.8, 0.25, 1)
 	chroma.special_id = "smear_bonus"
+	chroma.aim_shape = "cone"
+	chroma.aim_radius = 160.0
 	films["chroma"] = chroma
 
 	# === НУАР-32 | Синяя | Ч/Б. Игнор 50% защиты. Крит ×4 ===
@@ -41,6 +43,8 @@ func _register_films():
 	noir.rarity = "blue"
 	noir.rarity_color = Color(0.0, 0.45, 0.85, 1)
 	noir.special_id = "noir_crit"
+	noir.aim_shape = "sniper"
+	noir.aim_radius = 200.0
 	films["noir"] = noir
 
 	# === ИНФРАКРАСКА | Фиолетовая | Видит скрытых. Урон через стены ===
@@ -54,6 +58,8 @@ func _register_films():
 	infra.rarity = "purple"
 	infra.rarity_color = Color(0.69, 0.05, 0.79, 1)
 	infra.special_id = "infrared_vision"
+	infra.aim_shape = "sector"
+	infra.aim_radius = 180.0
 	films["infrared"] = infra
 
 	# === ПОЛАРОИД | Жёлтая | Хилл 15 HP за убийство ===
@@ -69,6 +75,8 @@ func _register_films():
 	polaroid.rarity = "yellow"
 	polaroid.rarity_color = Color(1.0, 0.86, 0.0, 1)
 	polaroid.special_id = "polaroid_heal"
+	polaroid.aim_shape = "aoe"
+	polaroid.aim_radius = 100.0
 	films["polaroid"] = polaroid
 
 	# === КРОСС-ПРОЦЕСС | Красная | Случайный мод 0.5-3.0 ===
@@ -99,6 +107,8 @@ func _register_films():
 	frame_zero.rarity = "gold"
 	frame_zero.rarity_color = Color(1.0, 0.84, 0.0, 1)
 	frame_zero.special_id = "frame_zero_boss"
+	frame_zero.aim_shape = "sniper"
+	frame_zero.aim_radius = 250.0
 	films["frame_zero"] = frame_zero
 
 	current_film = films["obskura"]

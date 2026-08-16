@@ -94,20 +94,20 @@ func _ready():
 		sfx.name = "SFXPlayer"
 		add_child(sfx)
 
+	# Remove old AimVisual if exists (from previous runs)
+	var old_aim = get_node_or_null("AimVisual")
+	if old_aim:
+		old_aim.queue_free()
+	
+	# Create Node2D AimVisual as child of player (world-space, rotates toward cursor)
+	aim_visual = Node2D.new()
+	aim_visual.name = "AimVisual"
+	aim_visual.z_index = 100
+	aim_visual.draw.connect(_on_aim_visual_draw)
+	add_child(aim_visual)
+	
 	var canvas = get_node_or_null("CanvasLayer")
 	if canvas:
-		# Remove old Panel AimVisual if exists
-		var old_aim = canvas.get_node_or_null("AimVisual")
-		if old_aim:
-			old_aim.queue_free()
-		
-		# Create new Node2D AimVisual as child of player (not canvas)
-		aim_visual = get_node_or_null("AimVisual")
-		if aim_visual == null:
-			aim_visual = Node2D.new()
-			aim_visual.name = "AimVisual"
-			aim_visual.z_index = 100
-			add_child(aim_visual)
 		
 		flash_overlay = canvas.get_node_or_null("FlashOverlay")
 		var ui = canvas.get_node_or_null("UI")
@@ -127,8 +127,6 @@ func _ready():
 		blind_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		canvas.add_child(blind_overlay)
 
-	if aim_visual:
-		aim_visual.visible = false
 	if flash_overlay:
 		flash_overlay.visible = false
 
@@ -193,57 +191,37 @@ func handle_movement():
 	move_and_slide()
 
 func handle_aiming(delta):
+	# Update aim visual rotation toward cursor (always visible)
+	if aim_visual:
+		aim_visual.visible = true
+		var mouse_world = get_global_mouse_position()
+		var dir = mouse_world - global_position
+		if dir.length() > 0:
+			aim_visual.rotation = dir.angle()
+		aim_visual.queue_redraw()
+
 	if is_blinded:
 		# Can't aim while blinded
 		is_aiming = false
 		if aim_area:
 			aim_area.monitoring = false
-		if aim_visual:
-			aim_visual.visible = false
-			aim_visual.scale = Vector2(1, 1)
 		focus_time = max(focus_time - delta * 4.0, 0.0)
 		if RelicManager.has_effect("slow_time_20"):
 			Engine.time_scale = 1.0
 		return
 
+	# Update aim params from current film
+	film_aim_params = FilmManager.get_aim_params()
+	_update_aim_shape()
+
 	if Input.is_action_pressed("aim"):
 		is_aiming = true
-		
-		# Update aim params from current film
-		film_aim_params = FilmManager.get_aim_params()
-		_update_aim_shape()
-		
-		# Move aim to cursor (world space)
+
+		# Move aim area to cursor (world space)
 		if aim_area:
 			aim_area.monitoring = true
 			aim_area.global_position = get_global_mouse_position()
-		
-		# Move aim visual to cursor (screen space)
-		if aim_visual:
-			aim_visual.visible = true
-			var mouse_screen = get_viewport().get_mouse_position()
-			var ap = film_aim_params
-			if ap.get("shape", "circle") == "rect":
-				aim_visual.size = Vector2(ap.get("width", 200), ap.get("height", 140))
-			else:
-				aim_visual.size = Vector2(ap.get("radius", 120) * 2, ap.get("radius", 120) * 2)
-			aim_visual.position = mouse_screen - aim_visual.size / 2
-			# Style: circle = rounded, rect = square
-			var style = StyleBoxFlat.new()
-			style.bg_color = Color(1, 1, 1, 0)
-			style.border_color = Color(1, 1, 1, 0.7)
-			style.border_width_left = 2
-			style.border_width_top = 2
-			style.border_width_right = 2
-			style.border_width_bottom = 2
-			if ap.get("shape", "circle") == "circle":
-				var r = aim_visual.size.x / 2
-				style.corner_radius_top_left = r
-				style.corner_radius_top_right = r
-				style.corner_radius_bottom_left = r
-				style.corner_radius_bottom_right = r
-			aim_visual.add_theme_stylebox_override("panel", style)
-		
+
 		if RelicManager.has_effect("slow_time_20"):
 			Engine.time_scale = RelicManager.get_time_scale()
 
@@ -264,9 +242,6 @@ func handle_aiming(delta):
 		if aim_area:
 			aim_area.monitoring = false
 			aim_area.position = Vector2.ZERO
-		if aim_visual:
-			aim_visual.visible = false
-			aim_visual.scale = Vector2(1, 1)
 		focus_time = max(focus_time - delta * 4.0, 0.0)
 		if RelicManager.has_effect("slow_time_20"):
 			Engine.time_scale = 1.0
@@ -274,7 +249,10 @@ func handle_aiming(delta):
 func handle_shooting():
 	if is_reloading or current_film <= 0:
 		return
-	if Input.is_action_just_pressed("shoot") and is_aiming:
+	var shoot_pressed = Input.is_action_just_pressed("shoot")
+	if shoot_pressed:
+		print("SHOOT pressed | is_aiming: ", is_aiming, " | film: ", current_film)
+	if shoot_pressed and is_aiming:
 		take_photo()
 
 func take_photo():
@@ -346,8 +324,8 @@ func _update_aim_shape():
 		circ.radius = ap.get("radius", 120)
 		aim_shape.shape = circ
 
-func _draw_aim():
-	if aim_visual == null or not is_aiming:
+func _on_aim_visual_draw():
+	if aim_visual == null:
 		return
 	var ap = FilmManager.get_aim_params()
 	var shape = ap.get("shape", "circle")
@@ -359,11 +337,9 @@ func _draw_aim():
 	
 	match shape:
 		"circle":
-			# Circle in front of player
 			aim_visual.draw_circle(Vector2(radius, 0), radius, color)
 			aim_visual.draw_arc(Vector2(radius, 0), radius, 0, TAU, 32, line_color, 2)
 		"cone":
-			# Triangle cone
 			var pts = PackedVector2Array([
 				Vector2.ZERO,
 				Vector2(radius, -radius * 0.4),
@@ -374,7 +350,6 @@ func _draw_aim():
 			aim_visual.draw_line(Vector2.ZERO, Vector2(radius, -radius * 0.4), line_color, 2)
 			aim_visual.draw_line(Vector2.ZERO, Vector2(radius, radius * 0.4), line_color, 2)
 		"beam":
-			# Narrow rectangle beam
 			var pts = PackedVector2Array([
 				Vector2(0, -height * 0.15),
 				Vector2(width, -height * 0.15),
@@ -385,7 +360,6 @@ func _draw_aim():
 			aim_visual.draw_polyline(pts, line_color, 2)
 			aim_visual.draw_line(Vector2(0, -height * 0.15), Vector2(0, height * 0.15), line_color, 2)
 		"sector":
-			# Wide arc sector
 			var arc_pts = PackedVector2Array([Vector2.ZERO])
 			var steps = 16
 			var angle = PI * 0.4
@@ -396,11 +370,9 @@ func _draw_aim():
 			for i in range(arc_pts.size() - 1):
 				aim_visual.draw_line(arc_pts[i], arc_pts[i + 1], line_color, 2)
 		"aoe":
-			# Circle around player
 			aim_visual.draw_circle(Vector2.ZERO, radius, color)
 			aim_visual.draw_arc(Vector2.ZERO, radius, 0, TAU, 32, line_color, 2)
 		"sniper":
-			# Crosshair lines
 			var r = radius
 			aim_visual.draw_line(Vector2(r, -r * 0.3), Vector2(r, r * 0.3), line_color, 2)
 			aim_visual.draw_line(Vector2(r * 0.7, 0), Vector2(r * 1.3, 0), line_color, 2)

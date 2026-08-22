@@ -56,6 +56,10 @@ func open_chest():
 	GameManager.photo_prints += prints
 	print("TREASURE: +", prints, " prints")
 
+	# 30% chance to drop active item
+	if randf() < 0.3:
+		_drop_active_item()
+
 func _roll_relic() -> String:
 	var floor = GameManager.current_floor
 	var roll = randf()
@@ -114,3 +118,30 @@ func _show_loot_popup(relic):
 	tween.tween_property(popup, "position:y", popup.position.y - 50, 2.0)
 	tween.tween_property(popup, "modulate:a", 0.0, 0.5)
 	tween.tween_callback(popup.queue_free)
+
+
+func _drop_active_item():
+	var possible = ["flash_bomb", "heal_pack", "time_freeze", "damage_boost", "shield", "teleport"]
+	var item_id = possible[randi() % possible.size()]
+	var item_data = GameManager.get_active_item_data(item_id)
+	if item_data.is_empty():
+		return
+	
+	var added = GameManager.add_active_item_to_hotbar(item_id)
+	if added:
+		print("TREASURE: Active item dropped — ", item_data.name)
+		var popup = Label.new()
+		popup.text = "АКТИВНЫЙ ПРЕДМЕТ: %s" % item_data.name
+		popup.position = global_position + Vector2(-80, -90)
+		popup.z_index = 100
+		popup.add_theme_font_size_override("font_size", 13)
+		popup.add_theme_color_override("font_color", item_data.icon_color)
+		popup.add_theme_color_override("font_outline_color", Color(0,0,0,1))
+		popup.add_theme_constant_override("outline_size", 3)
+		get_tree().current_scene.add_child(popup)
+		var tween = get_tree().create_tween()
+		tween.tween_property(popup, "position:y", popup.position.y - 40, 2.0)
+		tween.tween_property(popup, "modulate:a", 0.0, 0.5)
+		tween.tween_callback(popup.queue_free)
+	else:
+		print("TREASURE: Hotbar full, active item not picked up")

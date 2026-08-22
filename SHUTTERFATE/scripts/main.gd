@@ -18,6 +18,7 @@ var player: Node2D = null
 var teleport_cooldown: float = 0.0
 
 func _ready():
+	add_to_group("main")
 	player = get_node_or_null("Player")
 	if player == null:
 		player = get_tree().get_first_node_in_group("player")
@@ -46,6 +47,12 @@ func _ready():
 		dm.name = "DevMenu"
 		add_child(dm)
 		print("Dev menu loaded (F1)")
+
+	# Hotbar system
+	GameManager.reset_hotbar()
+	var hotbar_ui = preload("res://scripts/hotbar_ui.gd").new()
+	add_child(hotbar_ui)
+	print("Hotbar UI loaded")
 
 	var pause_menu = load("res://scripts/pause_menu.gd")
 	if pause_menu:
@@ -246,6 +253,11 @@ func spawn_treasure_room(room):
 	print("TREASURE ROOM")
 	if room == null:
 		return
+	var room_data = floor_gen.get_current_room_data()
+	if room_data.get("chest_spawned", false):
+		print("Chest already spawned in this room")
+		return
+	room_data["chest_spawned"] = true
 	var chest = Area2D.new()
 	chest.set_script(load("res://scripts/treasure_chest.gd"))
 	var chest_pos = room.global_position + room.get_center()
@@ -321,7 +333,7 @@ func _spawn_boss(room):
 
 	current_room_enemies.append(boss_node)
 	enemies_alive += 1
-	boss_node.tree_exited.connect(_on_enemy_died)
+	boss_node.tree_exited.connect(_on_boss_died)
 	print("BOSS SPAWNED: ", boss_node.name, " at floor ", floor_num)
 
 func _get_boss_for_floor(floor: int):
@@ -526,6 +538,88 @@ func next_floor():
 	AchievementManager.check_old_lens_floor5(GameManager.current_floor)
 	generate_floor()
 
+func _find_room_of_type(room_type: String) -> Vector2i:
+	if floor_gen == null:
+		return Vector2i.ZERO
+	for pos in floor_gen.floor_map.keys():
+		var data = floor_gen.floor_map[pos]
+		if data.get("type", "") == room_type:
+			return pos
+	return Vector2i.ZERO
+
+func _on_boss_died(boss = null):
+	print("BOSS DIED")
+	_on_boss_defeated()
+
+func _on_boss_defeated():
+	print("BOSS DEFEATED on floor ", GameManager.current_floor)
+	AchievementManager.unlock("boss_slayer")
+	if GameManager.current_floor >= 15:
+		_game_victory()
+	else:
+		next_floor()
+
+func _game_victory():
+	print("=== VICTORY ===")
+	AchievementManager.unlock("shutter_fate")
+	# Create simple victory screen programmatically
+	var victory_layer = CanvasLayer.new()
+	victory_layer.name = "VictoryScreen"
+	add_child(victory_layer)
+	
+	var bg = ColorRect.new()
+	bg.color = Color(0, 0, 0, 0.85)
+	bg.size = Vector2(1920, 1080)
+	victory_layer.add_child(bg)
+	
+	var title = Label.new()
+	title.text = "ПОБЕДА"
+	title.position = Vector2(0, 200)
+	title.size = Vector2(1920, 100)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 72)
+	title.add_theme_color_override("font_color", Color(1, 0.8, 0.2, 1))
+	title.add_theme_constant_override("outline_size", 4)
+	victory_layer.add_child(title)
+	
+	var subtitle = Label.new()
+	subtitle.text = "Вы прошли все 15 этажей и победили Фотографа!"
+	subtitle.position = Vector2(0, 320)
+	subtitle.size = Vector2(1920, 60)
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.add_theme_font_size_override("font_size", 24)
+	subtitle.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
+	victory_layer.add_child(subtitle)
+	
+	var stats = Label.new()
+	stats.text = "Отпечатков: %d | Убийств: %d | Смертей: %d" % [GameManager.photo_prints, AchievementManager.total_kills, GameManager.total_deaths]
+	stats.position = Vector2(0, 400)
+	stats.size = Vector2(1920, 40)
+	stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stats.add_theme_font_size_override("font_size", 18)
+	stats.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0, 1))
+	victory_layer.add_child(stats)
+	
+	var hint = Label.new()
+	hint.text = "[ESC] — Вернуться в Хаб"
+	hint.position = Vector2(0, 500)
+	hint.size = Vector2(1920, 40)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 16)
+	hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1))
+	victory_layer.add_child(hint)
+	
+	# Pause game
+	Engine.time_scale = 0.0
+	await get_tree().create_timer(0.1).timeout
+	# Wait for ESC to return to hub
+	while true:
+		await get_tree().create_timer(0.1).timeout
+		if Input.is_action_just_pressed("ui_cancel"):
+			break
+	Engine.time_scale = 1.0
+	get_tree().change_scene_to_file("res://scenes/hub.tscn")
+
 func update_floor_ui():
 	var ui = get_node_or_null("FloorUI")
 	if ui:
@@ -536,6 +630,12 @@ func update_floor_ui():
 			var type_names = {"start": "Старт", "combat": "Бой", "elite": "Элита", "boss": "БОСС", "treasure": "Сокровище", "trap": "Ловушка", "puzzle": "Головоломка", "rest": "Отдых", "miniboss": "Минибосс", "gallery": "Галерея"}
 			var type_str = type_names.get(room_type, "Бой")
 			label.text = "Этаж: %d | %s" % [GameManager.current_floor, type_str]
+
+func _is_near_any(pos: Vector2, positions: Array, min_dist: float) -> bool:
+	for p in positions:
+		if pos.distance_to(p) < min_dist:
+			return true
+	return false
 
 func _physics_process(delta):
 	if teleport_cooldown > 0:
@@ -553,24 +653,78 @@ func spawn_trap_room(room):
 	print("TRAP ROOM")
 	if room == null:
 		return
-	for i in range(randi_range(2, 3)):
+	var room_data = floor_gen.get_current_room_data()
+	if room_data.get("traps_spawned", false):
+		return
+	room_data["traps_spawned"] = true
+	room_data["cleared"] = false
+
+	# Create a labyrinth of traps
+	var trap_count = 8 + randi() % 6
+	var used_positions = []
+	for i in range(trap_count):
 		var trap = Area2D.new()
-		var pos = room.global_position + room.get_random_floor_position(3)
+		trap.name = "Trap_%d" % i
+		var pos = room.global_position + room.get_random_floor_position(2)
+		while _is_near_any(pos, used_positions, 60):
+			pos = room.global_position + room.get_random_floor_position(2)
+		used_positions.append(pos)
 		trap.global_position = pos
+
 		var sprite = Sprite2D.new()
+		sprite.name = "TrapSprite"
 		sprite.texture = load("res://assets/floor_iso.png")
-		sprite.modulate = Color(1.0, 0.2, 0.2, 0.8)
-		sprite.scale = Vector2(0.8, 0.8)
+		sprite.modulate = Color(1.0, 0.15, 0.15, 0.9)
+		sprite.scale = Vector2(0.7, 0.7)
 		trap.add_child(sprite)
+
 		var coll = CollisionShape2D.new()
 		coll.shape = RectangleShape2D.new()
-		coll.shape.size = Vector2(40, 40)
+		coll.shape.size = Vector2(35, 35)
 		trap.add_child(coll)
+
 		trap.body_entered.connect(_on_trap_entered.bind(trap))
 		add_child(trap)
-	var room_data = floor_gen.get_current_room_data()
-	room_data["cleared"] = true
-	unlock_doors()
+		current_room_enemies.append(trap)
+
+	# Deactivation terminal
+	var terminal = Area2D.new()
+	terminal.name = "TrapTerminal"
+	terminal.set_meta("deactivated", false)
+	var term_pos = room.global_position
+	if room.has_method("get_center"):
+		term_pos += room.get_center() + Vector2(200, -100)
+	else:
+		term_pos += Vector2(200, -100)
+	terminal.global_position = term_pos
+
+	var term_sprite = Sprite2D.new()
+	term_sprite.name = "TermSprite"
+	term_sprite.texture = load("res://assets/floor_iso.png")
+	term_sprite.modulate = Color(0.2, 0.8, 1.0, 1.0)
+	term_sprite.scale = Vector2(1.0, 1.0)
+	terminal.add_child(term_sprite)
+
+	var term_coll = CollisionShape2D.new()
+	term_coll.shape = RectangleShape2D.new()
+	term_coll.shape.size = Vector2(50, 50)
+	terminal.add_child(term_coll)
+
+	var term_label = Label.new()
+	term_label.name = "TermLabel"
+	term_label.text = "[E] Деактивировать"
+	term_label.position = Vector2(-60, -55)
+	term_label.add_theme_font_size_override("font_size", 12)
+	term_label.add_theme_color_override("font_color", Color(0.2, 0.8, 1.0, 1))
+	term_label.add_theme_constant_override("outline_size", 2)
+	term_label.visible = false
+	terminal.add_child(term_label)
+
+	terminal.body_entered.connect(_on_terminal_entered.bind(terminal))
+	terminal.body_exited.connect(_on_terminal_exited.bind(terminal))
+	add_child(terminal)
+	current_room_enemies.append(terminal)
+	print("Trap room: ", trap_count, " traps + terminal spawned")
 
 func spawn_puzzle_room(room):
 	print("PUZZLE ROOM")
@@ -602,6 +756,54 @@ func spawn_puzzle_room(room):
 	puzzle.body_exited.connect(_on_puzzle_area_exited.bind(puzzle))
 	add_child(puzzle)
 	current_puzzle_object = puzzle
+
+func _on_terminal_entered(body, terminal):
+	if not body.is_in_group("player"):
+		return
+	var label = terminal.get_node_or_null("TermLabel")
+	if label:
+		label.visible = true
+	terminal.set_meta("player_near", true)
+
+func _on_terminal_exited(body, terminal):
+	if not body.is_in_group("player"):
+		return
+	var label = terminal.get_node_or_null("TermLabel")
+	if label:
+		label.visible = false
+	terminal.set_meta("player_near", false)
+
+func _process(delta):
+	# Trap terminal interaction
+	for child in get_children():
+		if child.name == "TrapTerminal" and child.get_meta("player_near", false):
+			if not child.get_meta("deactivated", false) and (Input.is_action_just_pressed("ui_accept") or Input.is_key_pressed(KEY_E)):
+				_deactivate_trap_room(child)
+	# Puzzle interaction
+	if current_puzzle_object and current_puzzle_object.get_meta("player_near", false):
+		if not puzzle_active and not current_puzzle_object.get_meta("solved", false):
+			if Input.is_action_just_pressed("ui_accept") or Input.is_key_pressed(KEY_E):
+				_open_puzzle_ui(current_puzzle_object)
+
+func _deactivate_trap_room(terminal):
+	terminal.set_meta("deactivated", true)
+	var label = terminal.get_node_or_null("TermLabel")
+	if label:
+		label.text = "ДЕАКТИВИРОВАНО"
+		label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.3, 1))
+	var sprite = terminal.get_node_or_null("TermSprite")
+	if sprite:
+		sprite.modulate = Color(0.2, 1.0, 0.3, 1.0)
+	for child in get_children():
+		if child.name.begins_with("Trap_"):
+			var trap_sprite = child.get_node_or_null("TrapSprite")
+			if trap_sprite:
+				trap_sprite.modulate = Color(0.3, 0.3, 0.3, 0.3)
+			child.body_entered.disconnect(_on_trap_entered)
+	var room_data = floor_gen.get_current_room_data()
+	room_data["cleared"] = true
+	unlock_doors()
+	print("Trap room deactivated!")
 
 func spawn_rest_room(room):
 	print("REST ROOM")
@@ -700,12 +902,18 @@ func _on_trap_entered(body, trap):
 func _on_puzzle_area_entered(body, puzzle):
 	if not body.is_in_group("player"):
 		return
-	pass
+	puzzle.set_meta("player_near", true)
+	var label = puzzle.get_node_or_null("Label")
+	if label:
+		label.visible = true
 
 func _on_puzzle_area_exited(body, puzzle):
 	if not body.is_in_group("player"):
 		return
-	pass
+	puzzle.set_meta("player_near", false)
+	var label = puzzle.get_node_or_null("Label")
+	if label:
+		label.visible = false
 
 func _open_puzzle_ui(puzzle_obj):
 	if puzzle_active:

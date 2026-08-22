@@ -1,5 +1,7 @@
 extends Node
 
+var player = null
+var current_film: String = "obskura"
 var photo_prints: int = 0
 var total_deaths: int = 0
 var total_kills: int = 0
@@ -259,3 +261,182 @@ func spend_prints(amount: int) -> bool:
 		photo_prints -= amount
 		return true
 	return false
+
+
+# ========== HOTBAR SYSTEM ==========
+var hotbar_slots: Array = [null, null, null, null, null, null]
+var max_hotbar_slots: int = 2
+var active_item_cooldowns: Dictionary = {}
+
+var damage_boost_active: bool = false
+var damage_boost_mult: float = 1.0
+var shield_active: bool = false
+
+const ACTIVE_ITEMS = {
+	"flash_bomb": {
+		"name": "Фотовспышка",
+		"desc": "Ослепляет всех врагов в комнате на 3 сек",
+		"cooldown": 8.0,
+		"icon_color": Color(1, 1, 0.8),
+		"effect": "flash"
+	},
+	"heal_pack": {
+		"name": "Проявитель",
+		"desc": "Восстанавливает 30 HP",
+		"cooldown": 12.0,
+		"icon_color": Color(0.2, 0.9, 0.3),
+		"effect": "heal"
+	},
+	"time_freeze": {
+		"name": "Заморозка кадра",
+		"desc": "Останавливает время на 2 сек",
+		"cooldown": 15.0,
+		"icon_color": Color(0.3, 0.7, 1.0),
+		"effect": "freeze"
+	},
+	"damage_boost": {
+		"name": "Перекрытие",
+		"desc": "Урон ×2 на 5 сек",
+		"cooldown": 20.0,
+		"icon_color": Color(0.9, 0.3, 0.3),
+		"effect": "damage_boost"
+	},
+	"shield": {
+		"name": "Крышка объектива",
+		"desc": "Блокирует следующий удар",
+		"cooldown": 10.0,
+		"icon_color": Color(0.5, 0.5, 0.9),
+		"effect": "shield"
+	},
+	"teleport": {
+		"name": "Двойная экспозиция",
+		"desc": "Телепортирует в случайную точку комнаты",
+		"cooldown": 6.0,
+		"icon_color": Color(0.7, 0.3, 0.9),
+		"effect": "teleport"
+	}
+}
+
+func get_active_item_data(item_id: String) -> Dictionary:
+	if ACTIVE_ITEMS.has(item_id):
+		return ACTIVE_ITEMS[item_id]
+	return {}
+
+func add_active_item_to_hotbar(item_id: String) -> bool:
+	for i in range(max_hotbar_slots):
+		if hotbar_slots[i] == null:
+			hotbar_slots[i] = item_id
+			print("Active item added to slot ", i + 1, ": ", item_id)
+			return true
+	return false
+
+func use_hotbar_slot(slot_index: int) -> bool:
+	if slot_index < 0 or slot_index >= max_hotbar_slots:
+		return false
+	var item_id = hotbar_slots[slot_index]
+	if item_id == null or item_id == "":
+		return false
+	var item_data = get_active_item_data(item_id)
+	if item_data.is_empty():
+		return false
+	# Check cooldown
+	if active_item_cooldowns.has(item_id):
+		if Time.get_ticks_msec() / 1000.0 < active_item_cooldowns[item_id]:
+			var main = get_tree().get_first_node_in_group("main")
+			if main and main.has_method("_show_message"):
+				main._show_message("Перезарядка!")
+			return false
+	_apply_active_effect(item_data.effect)
+	active_item_cooldowns[item_id] = Time.get_ticks_msec() / 1000.0 + item_data.cooldown
+	return true
+
+func _apply_active_effect(effect: String):
+	var _player = get_tree().get_first_node_in_group("player")
+	if not player:
+		return
+	match effect:
+		"flash":
+			_flash_enemies()
+		"heal":
+			if _player.has_method("heal"):
+				_player.heal(30)
+		"freeze":
+			_freeze_time()
+		"damage_boost":
+			_apply_damage_boost()
+		"shield":
+			_apply_shield()
+		"teleport":
+			_teleport_player()
+
+func _flash_enemies():
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	for enemy in enemies:
+		if enemy.has_method("stun"):
+			enemy.stun(3.0)
+		if enemy.has_node("Sprite2D"):
+			var sprite = enemy.get_node("Sprite2D")
+			sprite.modulate = Color(1.5, 1.5, 1.5)
+			var tween = get_tree().create_tween()
+			tween.tween_property(sprite, "modulate", Color(1, 1, 1), 3.0)
+
+func _freeze_time():
+	Engine.time_scale = 0.0
+	await get_tree().create_timer(2.0).timeout
+	Engine.time_scale = 1.0
+
+func _apply_damage_boost():
+	damage_boost_active = true
+	damage_boost_mult = 2.0
+	await get_tree().create_timer(5.0).timeout
+	damage_boost_active = false
+	damage_boost_mult = 1.0
+
+func _apply_shield():
+	shield_active = true
+
+func consume_shield() -> bool:
+	if shield_active:
+		shield_active = false
+		return true
+	return false
+
+func _teleport_player():
+	var player = GameManager.player
+	var main = get_tree().get_first_node_in_group("main")
+	if main and main.has_method("get_random_point_in_current_room"):
+		player.position = main.get_random_point_in_current_room()
+	else:
+		player.position += Vector2(randi() % 200 - 100, randi() % 200 - 100)
+
+func get_hotbar_upgrade_cost() -> int:
+	match max_hotbar_slots:
+		2: return 150
+		3: return 300
+		4: return 600
+		5: return 1200
+	return 99999
+
+func buy_hotbar_upgrade() -> bool:
+	if max_hotbar_slots >= 6:
+		return false
+	var cost = get_hotbar_upgrade_cost()
+	if photo_prints < cost:
+		return false
+	photo_prints -= cost
+	max_hotbar_slots += 1
+	print("Hotbar upgraded to ", max_hotbar_slots, " slots")
+	return true
+
+func reset_hotbar():
+	hotbar_slots = [null, null, null, null, null, null]
+	active_item_cooldowns.clear()
+	damage_boost_active = false
+	shield_active = false
+
+
+func player_died():
+	total_deaths += 1
+	print("Player died!")
+	await get_tree().create_timer(1.0).timeout
+	get_tree().change_scene_to_file("res://scenes/hub.tscn")

@@ -75,6 +75,12 @@ func _create_ui():
 	# Row 4: Teleports
 	_add_action_btn("TP to Boss", _tp_to_boss)
 	_add_action_btn("TP to Treasure", _tp_to_treasure)
+	_add_action_btn("TP to Combat", _tp_to_combat)
+	_add_action_btn("TP to Trap", _tp_to_trap)
+	_add_action_btn("TP to Puzzle", _tp_to_puzzle)
+	_add_action_btn("TP to Rest", _tp_to_rest)
+	_add_action_btn("TP to Shop", _tp_to_shop)
+	_add_action_btn("TP to Start", _tp_to_start)
 
 	# Row 5: Unlock + Skip
 	_add_action_btn("Unlock All Doors", _unlock_doors)
@@ -180,6 +186,37 @@ func _unlock_doors():
 	if main and main.has_method("unlock_doors"):
 		main.unlock_doors()
 		print("DEV: All doors unlocked")
+
+func _tp_to_combat():
+	_tp_to_room_type("combat")
+
+func _tp_to_trap():
+	_tp_to_room_type("trap")
+
+func _tp_to_puzzle():
+	_tp_to_room_type("puzzle")
+
+func _tp_to_rest():
+	_tp_to_room_type("rest")
+
+func _tp_to_shop():
+	_tp_to_room_type("shop")
+
+func _tp_to_start():
+	var main = get_tree().get_first_node_in_group("main")
+	if main and main.has_method("move_to_room"):
+		main.call_deferred("move_to_room", Vector2i.ZERO, "")
+		print("DEV: TP to start room")
+
+func _tp_to_room_type(room_type: String):
+	var main = get_tree().get_first_node_in_group("main")
+	if main and main.has_method("_find_room_of_type"):
+		var pos = main._find_room_of_type(room_type)
+		if pos != Vector2i.ZERO:
+			main.call_deferred("move_to_room", pos, "")
+			print("DEV: TP to ", room_type, " room")
+		else:
+			print("DEV: No ", room_type, " room found")
 
 func _next_floor():
 	GameManager.current_floor += 1

@@ -24,6 +24,7 @@ var focal_length: float = 50.0
 
 var max_film: int = 36
 var current_film: int = 36
+var base_damage_mult: float = 1.0
 
 # Blind mechanic
 var is_blinded: bool = false
@@ -94,6 +95,17 @@ func _ready():
 		sfx.name = "SFXPlayer"
 		add_child(sfx)
 
+	# InteractionArea for pickups/interactables
+	var interaction_area = get_node_or_null("InteractionArea")
+	if interaction_area == null:
+		interaction_area = Area2D.new()
+		interaction_area.name = "InteractionArea"
+		var shape = CollisionShape2D.new()
+		shape.shape = CircleShape2D.new()
+		shape.shape.radius = 24.0
+		interaction_area.add_child(shape)
+		add_child(interaction_area)
+
 	# Remove old AimVisual if exists (from previous runs)
 	var old_aim = get_node_or_null("AimVisual")
 	if old_aim:
@@ -146,9 +158,25 @@ func _physics_process(delta):
 	handle_movement()
 	handle_aiming(delta)
 	handle_shooting()
+	handle_hotbar_input()
 	handle_camera_settings()
 	update_ui()
 	z_index = int(global_position.y)
+
+func handle_hotbar_input():
+	if Input.is_action_just_pressed("ui_1"):
+		GameManager.use_hotbar_slot(0)
+	elif Input.is_action_just_pressed("ui_2"):
+		GameManager.use_hotbar_slot(1)
+	elif Input.is_action_just_pressed("ui_3"):
+		GameManager.use_hotbar_slot(2)
+	elif Input.is_action_just_pressed("ui_4"):
+		GameManager.use_hotbar_slot(3)
+	elif Input.is_action_just_pressed("ui_5"):
+		GameManager.use_hotbar_slot(4)
+	elif Input.is_key_pressed(KEY_6):
+		if Input.is_action_just_pressed("ui_6") or not Input.is_action_pressed("ui_accept"):
+			GameManager.use_hotbar_slot(5)
 
 func _update_blind(delta):
 	if blind_timer > 0:
@@ -206,7 +234,7 @@ func handle_aiming(delta):
 		if aim_area:
 			aim_area.monitoring = false
 		focus_time = max(focus_time - delta * 4.0, 0.0)
-		if RelicManager.has_effect("slow_time_20"):
+		if RelicManager.has_effect("slow_time_10"):
 			Engine.time_scale = 1.0
 		return
 
@@ -222,8 +250,8 @@ func handle_aiming(delta):
 			aim_area.monitoring = true
 			aim_area.global_position = get_global_mouse_position()
 
-		if RelicManager.has_effect("slow_time_20"):
-			Engine.time_scale = RelicManager.get_time_scale()
+		if RelicManager.has_effect("slow_time_10"):
+			Engine.time_scale = 0.5
 
 		var enemies = get_enemies_in_aim()
 		var build_rate = FilmManager.get_focus_build_rate()
@@ -243,7 +271,7 @@ func handle_aiming(delta):
 			aim_area.monitoring = false
 			aim_area.position = Vector2.ZERO
 		focus_time = max(focus_time - delta * 4.0, 0.0)
-		if RelicManager.has_effect("slow_time_20"):
+		if RelicManager.has_effect("slow_time_10"):
 			Engine.time_scale = 1.0
 
 func handle_shooting():
@@ -482,6 +510,13 @@ func _on_reload_timer_timeout():
 func take_damage(amount: int):
 	if is_downed:
 		return
+	
+	# Shield check (active item)
+	if GameManager.shield_active:
+		GameManager.consume_shield()
+		_show_blocked_effect()
+		return
+	
 	AchievementManager.add_damage_taken(amount)
 	var dev_menu = get_tree().get_first_node_in_group("main")
 	if dev_menu:
@@ -507,6 +542,20 @@ func take_damage(amount: int):
 			_enter_downed_state()
 		else:
 			die()
+
+func _show_blocked_effect():
+	var label = Label.new()
+	label.text = "BLOCKED"
+	label.position = global_position + Vector2(0, -30)
+	label.modulate = Color(0.3, 0.5, 1.0)
+	get_tree().current_scene.add_child(label)
+	await get_tree().create_timer(0.8).timeout
+	label.queue_free()
+
+func modify_damage(multiplier: float, duration: float):
+	base_damage_mult = multiplier
+	await get_tree().create_timer(duration).timeout
+	base_damage_mult = 1.0
 
 func _auto_aim():
 	var nearest = _get_nearest_enemy()

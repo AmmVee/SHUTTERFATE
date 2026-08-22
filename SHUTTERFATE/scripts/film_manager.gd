@@ -15,6 +15,9 @@ func _register_films():
 	obskura.max_frames = 36
 	obskura.rarity = "white"
 	obskura.rarity_color = Color(0.95, 0.95, 0.95, 1)
+	obskura.exposure_mult = 1.0
+	obskura.iso_mult = 1.0
+	obskura.aperture_mult = 1.0
 	films["obskura"] = obskura
 
 	# === ХРОМА-400 | Зелёная | +25% урон по Нечётким ===
@@ -29,6 +32,9 @@ func _register_films():
 	chroma.special_id = "smear_bonus"
 	chroma.aim_shape = "cone"
 	chroma.aim_radius = 160.0
+	chroma.exposure_mult = 1.0
+	chroma.iso_mult = 1.0
+	chroma.aperture_mult = 1.0
 	films["chroma"] = chroma
 
 	# === НУАР-32 | Синяя | Ч/Б. Игнор 50% защиты. Крит ×4 ===
@@ -45,6 +51,9 @@ func _register_films():
 	noir.special_id = "noir_crit"
 	noir.aim_shape = "sniper"
 	noir.aim_radius = 200.0
+	noir.exposure_mult = 1.0
+	noir.iso_mult = 1.0
+	noir.aperture_mult = 1.0
 	films["noir"] = noir
 
 	# === ИНФРАКРАСКА | Фиолетовая | Видит скрытых. Урон через стены ===
@@ -60,6 +69,9 @@ func _register_films():
 	infra.special_id = "infrared_vision"
 	infra.aim_shape = "sector"
 	infra.aim_radius = 180.0
+	infra.exposure_mult = 1.0
+	infra.iso_mult = 1.0
+	infra.aperture_mult = 1.0
 	films["infrared"] = infra
 
 	# === ПОЛАРОИД | Жёлтая | Хилл 15 HP за убийство ===
@@ -77,6 +89,9 @@ func _register_films():
 	polaroid.special_id = "polaroid_heal"
 	polaroid.aim_shape = "aoe"
 	polaroid.aim_radius = 100.0
+	polaroid.exposure_mult = 1.0
+	polaroid.iso_mult = 1.0
+	polaroid.aperture_mult = 1.0
 	films["polaroid"] = polaroid
 
 	# === КРОСС-ПРОЦЕСС | Красная | Случайный мод 0.5-3.0 ===
@@ -92,6 +107,9 @@ func _register_films():
 	xpro.aim_radius = 120.0
 	xpro.aim_width = 220.0
 	xpro.aim_height = 60.0
+	xpro.exposure_mult = 1.0
+	xpro.iso_mult = 1.0
+	xpro.aperture_mult = 1.0
 	films["xpro"] = xpro
 
 	# === КАДР НОЛЬ | Золотая | Урон = HP босса × 0.75 ===
@@ -109,6 +127,9 @@ func _register_films():
 	frame_zero.special_id = "frame_zero_boss"
 	frame_zero.aim_shape = "sniper"
 	frame_zero.aim_radius = 250.0
+	frame_zero.exposure_mult = 1.0
+	frame_zero.iso_mult = 1.0
+	frame_zero.aperture_mult = 1.0
 	films["frame_zero"] = frame_zero
 
 	current_film = films["obskura"]

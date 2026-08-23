@@ -9,6 +9,86 @@ var camera_level: int = 1
 var photo_gallery: Array[Dictionary] = []
 var coop_mode: bool = false
 var unlocked_films: Array = ["obskura"]
+var mouse_sensitivity: float = 1.0
+
+# ========== NPC SYSTEM (8 NPCs for Hub) ==========
+var met_npcs: Array[String] = []
+var npc_dialogues_shown: Dictionary = {}
+
+const NPCS = {
+	"film_keeper": {
+		"name": "Хранитель плёнок",
+		"desc": "Старик с запахом фиксажа. Знает всё о кассетах Обскуры.",
+		"color": Color(0.9, 0.8, 0.6, 1),
+		"hub_pos": Vector2(400, 200),
+		"hub_label": "[E] Плёнки"
+	},
+	"challenge_master": {
+		"name": "Мастер испытаний",
+		"desc": "Бывший фотожурналист. Бросает вызов всем, кто держит камеру.",
+		"color": Color(0.9, 0.5, 0.2, 1),
+		"hub_pos": Vector2(1520, 200),
+		"hub_label": "[E] Испытания"
+	},
+	"gallery_curator": {
+		"name": "Куратор галереи",
+		"desc": "Она видит историю в каждом кадре. Собирает лучшие снимки.",
+		"color": Color(0.9, 0.5, 0.8, 1),
+		"hub_pos": Vector2(1700, 540),
+		"hub_label": "[E] Галерея"
+	},
+	"camera_engineer": {
+		"name": "Инженер камеры",
+		"desc": "Механик с масляными пальцами. Улучшит любую камеру за отпечатки.",
+		"color": Color(0.3, 0.8, 1.0, 1),
+		"hub_pos": Vector2(1520, 880),
+		"hub_label": "[E] Апгрейды"
+	},
+	"relic_merchant": {
+		"name": "Торговец реликвиями",
+		"desc": "Торгует находками из глубин Обскуры. Цены кусаются.",
+		"color": Color(1.0, 0.85, 0.2, 1),
+		"hub_pos": Vector2(400, 880),
+		"hub_label": "[E] Магазин"
+	},
+	"obscura_gardener": {
+		"name": "Садовник Обскуры",
+		"desc": "Выращивает странные растения в проявочных ваннах. Даёт баффы.",
+		"color": Color(0.3, 0.9, 0.5, 1),
+		"hub_pos": Vector2(220, 540),
+		"hub_label": "[E] Сад"
+	},
+	"archivist": {
+		"name": "Архивариус",
+		"desc": "Хранитель знаний. Знает слабости всех творений Обскуры.",
+		"color": Color(0.6, 0.7, 0.9, 1),
+		"hub_pos": Vector2(700, 150),
+		"hub_label": "[E] Архив"
+	},
+	"decorator": {
+		"name": "Рамочник",
+		"desc": "Художник без глаз. Чувствует свет и красит стены тьмой.",
+		"color": Color(0.8, 0.6, 0.9, 1),
+		"hub_pos": Vector2(1220, 150),
+		"hub_label": "[E] Декор"
+	}
+}
+
+func meet_npc(npc_id: String):
+	if npc_id not in met_npcs:
+		met_npcs.append(npc_id)
+		npc_dialogues_shown[npc_id] = false
+		print("NPC met: ", npc_id)
+
+func has_met_npc(npc_id: String) -> bool:
+	return npc_id in met_npcs
+
+func mark_npc_dialogue_shown(npc_id: String):
+	npc_dialogues_shown[npc_id] = true
+
+func was_npc_dialogue_shown(npc_id: String) -> bool:
+	return npc_dialogues_shown.get(npc_id, false)
+
 
 
 # ========== CAMERA UPGRADE SYSTEM (Meta-Progression) ==========

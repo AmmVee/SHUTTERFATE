@@ -3,13 +3,15 @@ extends Node
 # ========== ACHIEVEMENT SYSTEM ==========
 # All achievements persist across runs
 
-var achievements: Dictionary = {},
+var achievements: Dictionary = {
 		"shutter_fate": {
 			"name": "Судьба затвора",
 			"desc": "Пройдите все 15 этажей и победите Фотографа",
 			"condition": "max_floor >= 15",
 			"reward": "frame_gold"
-		}
+		},
+}
+
 var unlocked_achievements: Array[String] = []
 var achievement_progress: Dictionary = {}
 

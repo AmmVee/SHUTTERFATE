@@ -134,6 +134,15 @@ func _shoot_projectile():
 	timer.start()
 
 	get_tree().current_scene.add_child(proj)
+	# Add projectile movement script
+	var script = GDScript.new()
+	script.source_code = """extends CharacterBody2D
+func _physics_process(_delta):
+	move_and_slide()
+"""
+	script.reload()
+	proj.set_script(script)
+	proj.velocity = dir * 250.0
 
 	attack_timer.start(attack_cooldown)
 
@@ -143,8 +152,8 @@ func take_damage(amount: float):
 		sprite.modulate = Color(1, 0.3, 0.3)
 		flash_timer.start(0.1)
 	if player:
-		var knockback = global_position.direction_to(player.global_position) * -30
-		global_position += knockback
+		var knockback_dir = global_position.direction_to(player.global_position) * -1
+		move_and_collide(knockback_dir * 30.0)
 	if hp <= 0:
 		die()
 
@@ -234,3 +243,21 @@ func apply_temp_slow(slow_mult: float, duration: float):
 
 func get_max_hp() -> int:
 	return max_hp
+
+func spawn_blood():
+	for i in range(4):
+		var blood = ColorRect.new()
+		blood.color = Color(0.8, 0.05, 0.05, 0.9)
+		blood.size = Vector2(randf_range(3, 6), randf_range(3, 6))
+		var angle = randf() * TAU
+		var dist = randf_range(10, 30)
+		blood.position = global_position + Vector2(cos(angle), sin(angle)) * dist - blood.size * 0.5
+		blood.z_index = 50
+		get_tree().current_scene.add_child(blood)
+		
+		var tween = get_tree().create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(blood, "modulate:a", 0.0, 0.4 + randf() * 0.3)
+		tween.tween_property(blood, "position:y", blood.position.y + randf_range(10, 25), 0.4)
+		tween.chain().tween_callback(func(): blood.queue_free())
+

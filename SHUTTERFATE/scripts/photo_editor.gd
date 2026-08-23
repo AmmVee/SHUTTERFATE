@@ -32,6 +32,7 @@ func show_editor():
 	bg.color = Color(0.02, 0.02, 0.03, 0.95)
 	bg.size = Vector2(1920, 1080)
 	bg.position = Vector2(-960, -540)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
 
 	var title = Label.new()
@@ -250,12 +251,13 @@ func _on_gallery():
 
 func create_gallery_ui():
 	var gallery = CanvasLayer.new()
-	gallery.z_index = 800
+	# gallery.z_index = 800  # CanvasLayer has no z_index
 
 	var bg = ColorRect.new()
 	bg.color = Color(0.02, 0.02, 0.03, 0.95)
 	bg.size = Vector2(1920, 1080)
 	bg.position = Vector2(-960, -540)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	gallery.add_child(bg)
 
 	var title = Label.new()

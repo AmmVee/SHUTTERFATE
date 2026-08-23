@@ -3,6 +3,7 @@ extends CharacterBody2D
 signal died
 
 @export var move_speed: float = 170.0
+var base_speed: float = 170.0
 @export var aim_slowdown: float = 0.35
 @export var max_hp: int = 80
 @export var base_damage: float = 10.0
@@ -46,6 +47,7 @@ var params_label: Label
 func _ready():
 	add_to_group("player")
 	AchievementManager.reset_run_damage()
+	base_speed = move_speed
 	
 	# Coop: distinguish player 2
 	if player_id == 2:
@@ -248,7 +250,22 @@ func handle_aiming(delta):
 		# Move aim area to cursor (world space)
 		if aim_area:
 			aim_area.monitoring = true
-			aim_area.global_position = get_global_mouse_position()
+			var mouse_pos = get_global_mouse_position()
+			var dir = (mouse_pos - global_position).normalized()
+			var ap = FilmManager.get_aim_params()
+			var shape = ap.get("shape", "circle")
+			var max_dist = ap.get("radius", 120)
+			match shape:
+				"rect":
+					max_dist = max(ap.get("width", 200), ap.get("height", 140)) * 0.5
+				"beam":
+					max_dist = ap.get("width", 200) * 0.5
+			var dist = min(global_position.distance_to(mouse_pos), max_dist)
+			aim_area.global_position = global_position + dir * dist
+			# Cone/beam: aim_area stays at player, rotates toward cursor
+			if shape == "cone" or shape == "beam":
+				aim_area.global_position = global_position
+				aim_area.rotation = dir.angle()
 
 		if RelicManager.has_effect("slow_time_10"):
 			Engine.time_scale = 0.5
@@ -410,7 +427,7 @@ func _on_aim_visual_draw():
 			aim_visual.draw_arc(Vector2(radius, 0), radius, 0, TAU, 32, line_color, 2)
 
 func calculate_damage(enemy) -> float:
-	var dist = global_position.distance_to(enemy.global_position)
+	var dist = aim_area.global_position.distance_to(enemy.global_position)
 	var max_r = 160.0
 	var range_mult = RelicManager.get_aim_range_multiplier() * GameManager.get_upgrade_bonus_range() * GameManager.get_pact_aim_mult()
 	if aim_shape and aim_shape.shape:
@@ -479,9 +496,38 @@ func get_enemies_in_aim() -> Array:
 		return []
 	var bodies = aim_area.get_overlapping_bodies()
 	var enemies = []
+	var ap = FilmManager.get_aim_params()
+	var shape = ap.get("shape", "circle")
+	var aim_pos = aim_area.global_position
 	for b in bodies:
-		if b.is_in_group("enemies"):
-			enemies.append(b)
+		if not b.is_in_group("enemies"):
+			continue
+		var dist = aim_pos.distance_to(b.global_position)
+		match shape:
+			"circle", "aoe":
+				var r = ap.get("radius", 120)
+				if dist <= r:
+					enemies.append(b)
+			"rect":
+				var w = ap.get("width", 200) * 0.5
+				var h = ap.get("height", 140) * 0.5
+				var local = b.global_position - aim_pos
+				if abs(local.x) <= w and abs(local.y) <= h:
+					enemies.append(b)
+			"cone":
+				var r = ap.get("radius", 120)
+				var angle = ap.get("angle", 45.0)
+				if dist <= r:
+					var dir = (b.global_position - global_position).normalized()
+					var aim_dir = (aim_pos - global_position).normalized()
+					if dir.angle_to(aim_dir) <= deg_to_rad(angle * 0.5):
+						enemies.append(b)
+			"sniper":
+				var r = ap.get("radius", 120)
+				if dist <= r:
+					enemies.append(b)
+			_:
+				enemies.append(b)
 	return enemies
 
 func start_reload():
@@ -731,8 +777,8 @@ func handle_camera_settings():
 		aperture = 1.4 if aperture != 1.4 else 16.0
 
 func _aoe_damage():
-	var all_enemies = get_tree().get_nodes_in_group("enemies")
-	for enemy in all_enemies:
+	var enemies = get_enemies_in_aim()
+	for enemy in enemies:
 		if is_instance_valid(enemy) and "take_damage" in enemy:
 			enemy.take_damage(base_damage * 1.5)
 			print("Wet Print AOE!")
@@ -777,3 +823,14 @@ func update_ui():
 			"beam", "sniper": aim_size = ap_ui.get("width", 200)
 			"aoe": aim_size = ap_ui.get("radius", 100)
 		params_label.text = "f/%.1f | 1/%.0f | ISO %d | %.0fmm | %s\nПринты: %d | Прицел: %s (%d)" % [aperture, shutter_speed, iso, focal_length, film_name, GameManager.photo_prints, aim_desc, aim_size]
+
+
+func get_max_hp() -> int:
+	return max_hp
+
+func apply_temp_slow(duration: float, factor: float):
+	move_speed = base_speed * factor
+	var timer = get_tree().create_timer(duration)
+	timer.timeout.connect(func():
+		move_speed = base_speed
+	)

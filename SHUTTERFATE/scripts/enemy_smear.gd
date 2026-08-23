@@ -103,8 +103,8 @@ func take_damage(amount: float):
 	spawn_blood()
 	play_sfx("res://assets/sounds/hit.wav")
 	if player:
-		var knockback = global_position.direction_to(player.global_position) * -50
-		global_position += knockback
+		var knockback_dir = global_position.direction_to(player.global_position) * -1
+		move_and_collide(knockback_dir * 50.0)
 	if hp <= 0:
 		die()
 

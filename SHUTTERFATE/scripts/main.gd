@@ -147,6 +147,11 @@ func enter_current_room():
 			room_data["visits"] = visits
 			room_data["cleared"] = false
 			print("Room visits: ", visits)
+			
+			# NPC encounter chance (8% per combat room, only unmet NPCs)
+			if randf() < 0.08:
+				spawn_npc_encounter(room)
+			
 			var enemy_count = 3 + int(GameManager.current_floor * 1.5)
 			if room_type == "elite":
 				enemy_count += 3
@@ -199,6 +204,94 @@ func _pick_enemy_scene() -> PackedScene:
 	if enemy_grain_scene != null and randf() < 0.3 + (floor_num * 0.05):
 		return enemy_grain_scene
 	return enemy_scene
+
+
+func spawn_npc_encounter(room):
+	var unmet = []
+	for npc_id in GameManager.NPCS.keys():
+		if not GameManager.has_met_npc(npc_id):
+			unmet.append(npc_id)
+	if unmet.size() == 0:
+		return
+
+	var npc_id = unmet[randi() % unmet.size()]
+	var data = GameManager.NPCS[npc_id]
+
+	var npc = Area2D.new()
+	npc.name = "NPCEncounter_" + npc_id
+	npc.set_meta("npc_id", npc_id)
+	var pos = room.global_position + room.get_center() + Vector2(randf_range(-60, 60), randf_range(-40, 40))
+	npc.global_position = pos
+
+	var sprite = Sprite2D.new()
+	sprite.name = "Sprite2D"
+	sprite.texture = load("res://assets/floor_iso.png")
+	sprite.modulate = data.color
+	sprite.scale = Vector2(0.9, 0.9)
+	npc.add_child(sprite)
+
+	var coll = CollisionShape2D.new()
+	coll.shape = CircleShape2D.new()
+	coll.shape.radius = 40.0
+	npc.add_child(coll)
+
+	var label = Label.new()
+	label.name = "Label"
+	label.text = "[E] " + data.name
+	label.position = Vector2(-60, -60)
+	label.add_theme_font_size_override("font_size", 12)
+	label.add_theme_color_override("font_color", data.color)
+	label.add_theme_constant_override("outline_size", 2)
+	npc.add_child(label)
+
+	npc.body_entered.connect(_on_npc_encounter_entered.bind(npc))
+	npc.body_exited.connect(_on_npc_encounter_exited.bind(npc))
+	add_child(npc)
+	current_room_enemies.append(npc)
+	print("NPC ENCOUNTER: ", data.name, " at ", pos)
+
+func _on_npc_encounter_entered(body, npc):
+	if not body.is_in_group("player"):
+		return
+	npc.set_meta("player_near", true)
+	var label = npc.get_node_or_null("Label")
+	if label:
+		label.visible = true
+
+func _on_npc_encounter_exited(body, npc):
+	if not body.is_in_group("player"):
+		return
+	npc.set_meta("player_near", false)
+	var label = npc.get_node_or_null("Label")
+	if label:
+		label.visible = false
+
+func _interact_npc_encounter(npc):
+	var npc_id = npc.get_meta("npc_id", "")
+	if npc_id == "":
+		return
+	var data = GameManager.NPCS[npc_id]
+	GameManager.meet_npc(npc_id)
+
+	var dialog = Label.new()
+	dialog.text = data.name + "\n\"" + data.desc + "\"\n\nТеперь этот персонаж будет ждать вас в Тёмной комнате."
+	dialog.position = Vector2(560, 400)
+	dialog.size = Vector2(800, 120)
+	dialog.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dialog.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dialog.add_theme_font_size_override("font_size", 16)
+	dialog.add_theme_color_override("font_color", data.color)
+	dialog.add_theme_constant_override("outline_size", 3)
+	dialog.z_index = 200
+	add_child(dialog)
+
+	var tween = get_tree().create_tween()
+	tween.tween_property(dialog, "modulate:a", 0.0, 3.0)
+	tween.tween_callback(func(): dialog.queue_free())
+
+	current_room_enemies.erase(npc)
+	npc.queue_free()
+	print("NPC encounter resolved: ", npc_id)
 
 func spawn_enemy_in_room(room, visit_count: int = 1):
 	if enemies_alive >= 20:
@@ -627,7 +720,7 @@ func update_floor_ui():
 		if label and floor_gen:
 			var room_data = floor_gen.get_current_room_data()
 			var room_type = room_data.get("type", "combat")
-			var type_names = {"start": "Старт", "combat": "Бой", "elite": "Элита", "boss": "БОСС", "treasure": "Сокровище", "trap": "Ловушка", "puzzle": "Головоломка", "rest": "Отдых", "miniboss": "Минибосс", "gallery": "Галерея"}
+			var type_names = {"start": "Старт", "combat": "Бой", "elite": "Элита", "boss": "БОСС", "treasure": "Сокровище", "trap": "Ловушка", "puzzle": "Головоломка", "rest": "Отдых", "miniboss": "Минибосс", "gallery": "Галерея", "shop": "Магазин"}
 			var type_str = type_names.get(room_type, "Бой")
 			label.text = "Этаж: %d | %s" % [GameManager.current_floor, type_str]
 
@@ -687,7 +780,7 @@ func spawn_trap_room(room):
 		add_child(trap)
 		current_room_enemies.append(trap)
 
-	# Deactivation terminal
+	# Deactivation terminal - spawn away from doors and traps
 	var terminal = Area2D.new()
 	terminal.name = "TrapTerminal"
 	terminal.set_meta("deactivated", false)
@@ -696,6 +789,32 @@ func spawn_trap_room(room):
 		term_pos += room.get_center() + Vector2(200, -100)
 	else:
 		term_pos += Vector2(200, -100)
+	# Ensure terminal is not too close to any door or trap
+	var min_door_dist = 150.0
+	var min_trap_dist = 80.0
+	var attempts = 0
+	while attempts < 30:
+		var too_close = false
+		# Check distance to all doors
+		for child in room.get_children():
+			if child.name.begins_with("Door_"):
+				if term_pos.distance_to(child.global_position) < min_door_dist:
+					too_close = true
+					break
+		# Check distance to all traps
+		if not too_close:
+			for trap_pos in used_positions:
+				if term_pos.distance_to(trap_pos) < min_trap_dist:
+					too_close = true
+					break
+		if not too_close:
+			break
+		# Pick new position
+		if room.has_method("get_random_floor_position"):
+			term_pos = room.global_position + room.get_random_floor_position(2)
+		else:
+			term_pos = room.global_position + room.get_center() + Vector2(randf_range(-100, 100), randf_range(-80, 80))
+		attempts += 1
 	terminal.global_position = term_pos
 
 	var term_sprite = Sprite2D.new()
@@ -784,6 +903,11 @@ func _process(delta):
 		if not puzzle_active and not current_puzzle_object.get_meta("solved", false):
 			if Input.is_action_just_pressed("ui_accept") or Input.is_key_pressed(KEY_E):
 				_open_puzzle_ui(current_puzzle_object)
+	# NPC encounter interaction
+	for child in get_children():
+		if child.name.begins_with("NPCEncounter_") and child.get_meta("player_near", false):
+			if Input.is_action_just_pressed("ui_accept") or Input.is_key_pressed(KEY_E):
+				_interact_npc_encounter(child)
 
 func _deactivate_trap_room(terminal):
 	terminal.set_meta("deactivated", true)

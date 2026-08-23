@@ -30,6 +30,7 @@ func _ready():
 	show_hub_ui()
 	create_film_selector()
 	create_relic_ui()
+	create_npc_zones()
 
 	# Dev menu
 	var dev_menu = load("res://scripts/dev_menu.gd")
@@ -43,11 +44,17 @@ func _ready():
 var near_desk: bool = false
 var near_npc: bool = false
 
+# ========== 8 NPC ZONES ==========
+var npc_zone_areas: Dictionary = {}
+var near_npc_zone: String = ""
+
 func _physics_process(_delta):
 	if near_desk and Input.is_action_just_pressed("ui_accept"):
 		start_run()
 	if near_npc and Input.is_action_just_pressed("ui_accept"):
 		talk_to_npc()
+	if near_npc_zone != "" and Input.is_action_just_pressed("ui_accept"):
+		talk_to_npc_zone(near_npc_zone)
 
 func _on_camera_desk_entered(body):
 	if body.is_in_group("player"):
@@ -68,6 +75,265 @@ func _on_npc_exited(body):
 	if body.is_in_group("player"):
 		near_npc = false
 		hide_prompt()
+
+
+# ========== NPC ZONE SYSTEM ==========
+func create_npc_zones():
+	for npc_id in GameManager.NPCS.keys():
+		var data = GameManager.NPCS[npc_id]
+		var zone = Area2D.new()
+		zone.name = "NPCZone_" + npc_id
+		zone.position = data.hub_pos
+		zone.set_meta("npc_id", npc_id)
+
+		var sprite = Sprite2D.new()
+		sprite.name = "ZoneSprite"
+		sprite.texture = load("res://assets/floor_iso.png")
+		sprite.modulate = data.color
+		sprite.scale = Vector2(0.8, 0.8)
+		sprite.visible = false
+		zone.add_child(sprite)
+
+		var coll = CollisionShape2D.new()
+		coll.shape = CircleShape2D.new()
+		coll.shape.radius = 60.0
+		zone.add_child(coll)
+
+		var label = Label.new()
+		label.name = "ZoneLabel"
+		label.text = data.hub_label
+		label.position = Vector2(-50, -70)
+		label.add_theme_font_size_override("font_size", 12)
+		label.add_theme_color_override("font_color", data.color)
+		label.add_theme_constant_override("outline_size", 2)
+		label.visible = false
+		zone.add_child(label)
+
+		zone.body_entered.connect(_on_npc_zone_entered.bind(npc_id))
+		zone.body_exited.connect(_on_npc_zone_exited.bind(npc_id))
+		add_child(zone)
+		npc_zone_areas[npc_id] = zone
+
+		_update_npc_zone_visibility(npc_id)
+
+func _update_npc_zone_visibility(npc_id: String):
+	if not npc_zone_areas.has(npc_id):
+		return
+	var zone = npc_zone_areas[npc_id]
+	var sprite = zone.get_node_or_null("ZoneSprite")
+	var label = zone.get_node_or_null("ZoneLabel")
+	var met = GameManager.has_met_npc(npc_id)
+	if sprite:
+		sprite.visible = met
+	if label:
+		label.visible = false
+	if npc_area and GameManager.met_npcs.size() > 0:
+		npc_area.visible = false
+
+func _on_npc_zone_entered(body, npc_id: String):
+	if not body.is_in_group("player"):
+		return
+	if not GameManager.has_met_npc(npc_id):
+		return
+	near_npc_zone = npc_id
+	var zone = npc_zone_areas.get(npc_id)
+	if zone:
+		var label = zone.get_node_or_null("ZoneLabel")
+		if label:
+			label.visible = true
+	var data = GameManager.NPCS[npc_id]
+	show_prompt("[E] " + data.name)
+
+func _on_npc_zone_exited(body, npc_id: String):
+	if not body.is_in_group("player"):
+		return
+	if near_npc_zone == npc_id:
+		near_npc_zone = ""
+		var zone = npc_zone_areas.get(npc_id)
+		if zone:
+			var label = zone.get_node_or_null("ZoneLabel")
+			if label:
+				label.visible = false
+		hide_prompt()
+
+func talk_to_npc_zone(npc_id: String):
+	close_all_panels()
+	if not GameManager.was_npc_dialogue_shown(npc_id):
+		create_npc_dialogue(npc_id)
+	else:
+		_open_npc_function(npc_id)
+
+func create_npc_dialogue(npc_id: String):
+	var data = GameManager.NPCS[npc_id]
+	var canvas = get_node_or_null("CanvasLayer")
+	if canvas == null:
+		return
+
+	var panel = ColorRect.new()
+	panel.name = "NPCDialoguePanel"
+	panel.color = Color(0.05, 0.05, 0.08, 0.95)
+	panel.position = Vector2(460, 250)
+	panel.size = Vector2(1000, 500)
+	canvas.add_child(panel)
+
+	var title = Label.new()
+	title.text = data.name
+	title.position = Vector2(0, 20)
+	title.size = Vector2(1000, 50)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", data.color)
+	title.add_theme_constant_override("outline_size", 4)
+	panel.add_child(title)
+
+	var desc = Label.new()
+	desc.text = data.desc
+	desc.position = Vector2(100, 100)
+	desc.size = Vector2(800, 80)
+	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.add_theme_font_size_override("font_size", 16)
+	desc.add_theme_color_override("font_color", Color(0.8, 0.8, 0.7, 1))
+	panel.add_child(desc)
+
+	var hint = Label.new()
+	hint.text = "Теперь этот персонаж обитает в вашей Тёмной комнате."
+	hint.position = Vector2(0, 200)
+	hint.size = Vector2(1000, 30)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 14)
+	hint.add_theme_color_override("font_color", Color(0.5, 0.7, 0.5, 1))
+	panel.add_child(hint)
+
+	var btn = Button.new()
+	btn.text = "ПРОДОЛЖИТЬ"
+	btn.position = Vector2(350, 350)
+	btn.size = Vector2(300, 50)
+	btn.add_theme_font_size_override("font_size", 18)
+	btn.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4, 1))
+	btn.pressed.connect(func():
+		GameManager.mark_npc_dialogue_shown(npc_id)
+		panel.queue_free()
+		_open_npc_function(npc_id)
+	)
+	panel.add_child(btn)
+
+func _open_npc_function(npc_id: String):
+	match npc_id:
+		"film_keeper":
+			create_film_selector()
+			_show_message("Выбор плёнки открыт")
+		"challenge_master":
+			create_npc_menu()
+		"gallery_curator":
+			_on_gallery_hub()
+		"camera_engineer":
+			create_upgrade_ui()
+		"relic_merchant":
+			create_shop_ui()
+		"obscura_gardener":
+			_create_gardener_ui()
+		"archivist":
+			_on_achievements()
+		"decorator":
+			_create_decorator_ui()
+
+func _create_gardener_ui():
+	var canvas = get_node_or_null("CanvasLayer")
+	if canvas == null:
+		return
+	var panel = ColorRect.new()
+	panel.name = "GardenerPanel"
+	panel.color = Color(0.05, 0.08, 0.05, 0.95)
+	panel.position = Vector2(560, 250)
+	panel.size = Vector2(800, 500)
+	canvas.add_child(panel)
+
+	var title = Label.new()
+	title.text = "ЗЕРКАЛЬНЫЙ САД"
+	title.position = Vector2(0, 20)
+	title.size = Vector2(800, 50)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", Color(0.3, 0.9, 0.5, 1))
+	panel.add_child(title)
+
+	var desc = Label.new()
+	desc.text = "Садовник выращивает странные растения в проявочных ваннах.
+Пока сад спит — встречайте больше NPC, чтобы разблокировать уход за садом."
+	desc.position = Vector2(50, 100)
+	desc.size = Vector2(700, 100)
+	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.add_theme_font_size_override("font_size", 14)
+	desc.add_theme_color_override("font_color", Color(0.7, 0.8, 0.7, 1))
+	panel.add_child(desc)
+
+	var btn_close = Button.new()
+	btn_close.text = "ЗАКРЫТЬ"
+	btn_close.position = Vector2(300, 400)
+	btn_close.size = Vector2(200, 40)
+	btn_close.add_theme_font_size_override("font_size", 16)
+	btn_close.add_theme_color_override("font_color", Color(0.8, 0.3, 0.3, 1))
+	btn_close.pressed.connect(func(): panel.queue_free())
+	panel.add_child(btn_close)
+
+func _create_decorator_ui():
+	var canvas = get_node_or_null("CanvasLayer")
+	if canvas == null:
+		return
+	var panel = ColorRect.new()
+	panel.name = "DecoratorPanel"
+	panel.color = Color(0.08, 0.05, 0.08, 0.95)
+	panel.position = Vector2(560, 250)
+	panel.size = Vector2(800, 500)
+	canvas.add_child(panel)
+
+	var title = Label.new()
+	title.text = "МАСТЕРСКАЯ РАМОЧНИКА"
+	title.position = Vector2(0, 20)
+	title.size = Vector2(800, 50)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", Color(0.8, 0.6, 0.9, 1))
+	panel.add_child(title)
+
+	var desc = Label.new()
+	desc.text = "Рамочник чувствует свет и красит стены тьмой.
+Косметические улучшения хаба появятся позже."
+	desc.position = Vector2(50, 100)
+	desc.size = Vector2(700, 100)
+	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.add_theme_font_size_override("font_size", 14)
+	desc.add_theme_color_override("font_color", Color(0.8, 0.7, 0.8, 1))
+	panel.add_child(desc)
+
+	var btn_close = Button.new()
+	btn_close.text = "ЗАКРЫТЬ"
+	btn_close.position = Vector2(300, 400)
+	btn_close.size = Vector2(200, 40)
+	btn_close.add_theme_font_size_override("font_size", 16)
+	btn_close.add_theme_color_override("font_color", Color(0.8, 0.3, 0.3, 1))
+	btn_close.pressed.connect(func(): panel.queue_free())
+	panel.add_child(btn_close)
+
+func _show_message(text: String):
+	var canvas = get_node_or_null("CanvasLayer")
+	if canvas == null:
+		return
+	var msg = Label.new()
+	msg.text = text
+	msg.position = Vector2(760, 600)
+	msg.size = Vector2(400, 30)
+	msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	msg.add_theme_font_size_override("font_size", 14)
+	msg.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4, 1))
+	msg.add_theme_constant_override("outline_size", 2)
+	canvas.add_child(msg)
+	var tween = get_tree().create_tween()
+	tween.tween_property(msg, "modulate:a", 0.0, 2.0)
+	tween.tween_callback(func(): msg.queue_free())
 
 func start_run():
 	print("Entering the Obscura...")
@@ -277,14 +543,19 @@ func _on_toggle_coop():
 
 func _on_gallery_hub():
 	close_all_panels()
-	var editor = CanvasLayer.new()
+	var canvas = get_node_or_null("CanvasLayer")
+	if canvas == null:
+		canvas = CanvasLayer.new()
+		canvas.name = "CanvasLayer"
+		add_child(canvas)
+	var editor = Control.new()
 	editor.set_script(load("res://scripts/photo_editor.gd"))
 	editor.name = "PhotoEditor"
 	editor.snapshot_data = {"boss_name": "", "floor": 0, "date": ""}
-	add_child(editor)
+	canvas.add_child(editor)
 	# Call gallery directly
 	await get_tree().create_timer(0.1).timeout
-	var pe = get_node_or_null("PhotoEditor")
+	var pe = canvas.get_node_or_null("PhotoEditor")
 	if pe and pe.has_method("create_gallery_ui"):
 		pe.create_gallery_ui()
 
@@ -493,7 +764,7 @@ func _on_settings():
 		canvas = CanvasLayer.new()
 		canvas.name = "CanvasLayer"
 		add_child(canvas)
-	var sm = Node.new()
+	var sm = Control.new()
 	sm.set_script(load("res://scripts/settings_menu.gd"))
 	sm.name = "SettingsMenu"
 	canvas.add_child(sm)
@@ -627,8 +898,12 @@ func close_all_panels():
 	if canvas:
 		for child in canvas.get_children():
 			var n = child.name
-			if n == "NPCMenuPanel" or n == "ShopPanel" or n == "UpgradePanel" or n == "PactPanel" or n == "DailyChallengePanel" or n == "SeasonalChallengePanel" or n == "AchievementsPanel" or n == "SettingsMenu" or n == "PhotoEditor":
+			if n == "NPCMenuPanel" or n == "ShopPanel" or n == "UpgradePanel" or n == "PactPanel" or n == "DailyChallengePanel" or n == "SeasonalChallengePanel" or n == "AchievementsPanel" or n == "SettingsMenu" or n == "PhotoEditor" or n == "NPCDialoguePanel" or n == "GardenerPanel" or n == "DecoratorPanel" or n.begins_with("Film") or n.begins_with("Relic"):
 				child.queue_free()
+	# Also clean up any PhotoEditor at root (legacy)
+	var pe = get_node_or_null("PhotoEditor")
+	if pe:
+		pe.queue_free()
 	npc_menu_open = false
 	shop_panel_open = false
 	upgrade_panel_open = false
@@ -738,7 +1013,7 @@ func create_shop_ui():
 	close_btn.size = Vector2(300, 40)
 	close_btn.add_theme_font_size_override("font_size", 16)
 	close_btn.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3, 1))
-	close_btn.pressed.connect(close_shop_ui)
+	close_btn.pressed.connect(func(): close_shop_ui(); create_npc_menu())
 	panel.add_child(close_btn)
 
 func _on_buy_relic(index: int):
@@ -757,7 +1032,6 @@ func _on_regen_shop():
 
 func close_shop_ui():
 	close_all_panels()
-	create_npc_menu()
 
 func create_upgrade_ui():
 	upgrade_panel_open = true
@@ -846,7 +1120,7 @@ func create_upgrade_ui():
 	close_btn.size = Vector2(300, 50)
 	close_btn.add_theme_font_size_override("font_size", 18)
 	close_btn.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3, 1))
-	close_btn.pressed.connect(close_upgrade_ui)
+	close_btn.pressed.connect(func(): close_upgrade_ui(); create_npc_menu())
 	panel.add_child(close_btn)
 
 func _on_upgrade_pressed(id: String):
@@ -857,7 +1131,6 @@ func _on_upgrade_pressed(id: String):
 
 func close_upgrade_ui():
 	close_all_panels()
-	create_npc_menu()
 
 func show_prompt(text: String):
 	var label = get_node_or_null("CanvasLayer/PromptLabel")

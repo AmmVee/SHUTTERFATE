@@ -48,7 +48,7 @@ func _ready():
 	add_to_group("player")
 	AchievementManager.reset_run_damage()
 	base_speed = move_speed
-	
+
 	# Coop: distinguish player 2
 	if player_id == 2:
 		var sprite = get_node_or_null("Sprite2D")
@@ -77,7 +77,7 @@ func _ready():
 			if aim_shape.shape == null:
 				aim_shape.shape = CircleShape2D.new()
 				aim_shape.shape.radius = 160.0
-			
+
 			# Load film aim params
 			film_aim_params = FilmManager.get_aim_params()
 			_update_aim_shape()
@@ -112,17 +112,17 @@ func _ready():
 	var old_aim = get_node_or_null("AimVisual")
 	if old_aim:
 		old_aim.queue_free()
-	
+
 	# Create Node2D AimVisual as child of player (world-space, rotates toward cursor)
 	aim_visual = Node2D.new()
 	aim_visual.name = "AimVisual"
 	aim_visual.z_index = 100
 	aim_visual.draw.connect(_on_aim_visual_draw)
 	add_child(aim_visual)
-	
+
 	var canvas = get_node_or_null("CanvasLayer")
 	if canvas:
-		
+
 		flash_overlay = canvas.get_node_or_null("FlashOverlay")
 		var ui = canvas.get_node_or_null("UI")
 		if ui:
@@ -320,6 +320,9 @@ func take_photo():
 		_aoe_damage()
 
 	for enemy in enemies:
+		if not is_instance_valid(enemy) or not enemy.has_method("take_damage"):
+			continue
+
 		var was_alive = true
 		if "hp" in enemy:
 			was_alive = enemy.hp > 0
@@ -379,7 +382,7 @@ func _on_aim_visual_draw():
 	var height = ap.get("height", 140)
 	var color = Color(1, 1, 1, 0.3)
 	var line_color = Color(1, 1, 1, 0.8)
-	
+
 	match shape:
 		"circle":
 			aim_visual.draw_circle(Vector2(radius, 0), radius, color)
@@ -556,13 +559,13 @@ func _on_reload_timer_timeout():
 func take_damage(amount: int):
 	if is_downed:
 		return
-	
+
 	# Shield check (active item)
 	if GameManager.shield_active:
 		GameManager.consume_shield()
 		_show_blocked_effect()
 		return
-	
+
 	AchievementManager.add_damage_taken(amount)
 	var dev_menu = get_tree().get_first_node_in_group("main")
 	if dev_menu:
@@ -657,7 +660,7 @@ func _enter_downed_state():
 	if sprite:
 		sprite.modulate = Color(0.5, 0.1, 0.1, 0.7)
 	print("Player ", player_id, " is DOWNED! Revive within ", max_downed_time, " seconds")
-	
+
 	# Show revive prompt
 	var label = Label.new()
 	label.name = "DownedLabel"
@@ -683,13 +686,13 @@ func die():
 
 	print("GAME OVER")
 	died.emit()
-	
+
 	# Show Game Over screen
 	var go = CanvasLayer.new()
 	go.set_script(load("res://scripts/game_over_screen.gd"))
 	go.name = "GameOverScreen"
 	get_tree().current_scene.add_child(go)
-	
+
 	# Disable player input
 	set_physics_process(false)
 
@@ -708,13 +711,16 @@ func flash_screen():
 	flash_overlay.visible = true
 	flash_overlay.modulate.a = 0.6
 	flash_overlay.scale = Vector2(1.0, 1.0)
-	
+
 	var tween = get_tree().create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(flash_overlay, "modulate:a", 0.0, 0.15)
 	tween.tween_property(flash_overlay, "scale", Vector2(1.2, 1.2), 0.15)
-	tween.chain().tween_callback(func(): if flash_overlay: flash_overlay.visible = false)
-	
+	tween.chain().tween_callback(func():
+		if flash_overlay != null:
+			flash_overlay.visible = false
+	)
+
 	# Local shutter flash at player position
 	spawn_shutter_flash()
 
@@ -725,7 +731,7 @@ func spawn_shutter_flash():
 	flash.position = global_position - Vector2(40, 40)
 	flash.z_index = 100
 	get_tree().current_scene.add_child(flash)
-	
+
 	var tween = get_tree().create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(flash, "modulate:a", 0.0, 0.12)
@@ -742,7 +748,7 @@ func show_damage_number(damage: float, pos: Vector2, is_crit: bool = false):
 	label.position = pos - Vector2(20, 30)
 	label.z_index = 150
 	get_tree().current_scene.add_child(label)
-	
+
 	var tween = get_tree().create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(label, "position:y", label.position.y - 50, 0.6)
@@ -757,7 +763,7 @@ func spawn_reload_particles():
 		p.position = global_position + Vector2(randf_range(-20, 20), randf_range(-20, 20))
 		p.z_index = 100
 		get_tree().current_scene.add_child(p)
-		
+
 		var tween = get_tree().create_tween()
 		tween.set_parallel(true)
 		tween.tween_property(p, "position:y", p.position.y - randf_range(30, 60), 0.5)

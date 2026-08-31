@@ -1,10 +1,5 @@
 extends CharacterBody2D
 
-# === АБЕРРАЦИЯ — Финальный босс, искажение реальности ===
-# Создаёт копии себя (только 1 настоящий)
-# Меняет гравитацию (игрок скользит)
-# Использует случайные механики предыдущих боссов
-
 @export var max_hp: float = 800.0
 @export var move_speed: float = 100.0
 @export var attack_damage: int = 25
@@ -22,31 +17,24 @@ var is_boss: bool = true
 enum Phase { ONE, TWO, THREE }
 var current_phase: int = Phase.ONE
 
-# Clone system
 var clone_timer: Timer
 var active_clones: Array = []
 var clone_count: int = 2
 
-# Gravity shift
 var gravity_timer: Timer
 var gravity_active: bool = false
 var gravity_dir: Vector2 = Vector2.ZERO
 var gravity_force: float = 200.0
 
-# Random boss mechanic rotation
 var mechanic_timer: Timer
 var current_mechanic: String = ""
-
-# Phase 1: Portraitist flashes
-# Phase 2: Developer jars + Photojournalist teleports
-# Phase 3: All mechanics + frenzy
 
 var jar_timer: Timer
 var teleport_timer: Timer
 var flash_attack_timer: Timer
 var frenzy_timer: Timer
 
-@onready var sprite: Sprite2D = $Sprite2D
+var sprite: Sprite2D = null
 var attack_timer: Timer
 var flash_timer: Timer
 
@@ -113,6 +101,8 @@ func _ready():
 	add_child(frenzy_timer)
 	frenzy_timer.timeout.connect(_frenzy_action)
 
+	# FIX: use get_node_or_null instead of @onready to handle dynamic spawning
+	sprite = get_node_or_null("Sprite2D")
 	if sprite:
 		sprite.scale = Vector2(2.5, 2.5)
 		sprite.modulate = Color(0.3, 0.1, 0.4, 1.0)
@@ -122,13 +112,9 @@ func _ready():
 func _physics_process(delta):
 	if player == null:
 		return
-
-	# Apply gravity push to player
 	if gravity_active and player:
 		player.velocity += gravity_dir * gravity_force * delta
-
 	_update_clones(delta)
-
 	match current_phase:
 		Phase.ONE:
 			_process_phase_one(delta)
@@ -137,7 +123,6 @@ func _physics_process(delta):
 		Phase.THREE:
 			_process_phase_three(delta)
 
-# ========== PHASE 1: The Distortion ==========
 func _start_phase_one():
 	print("=== PHASE 1: The Distortion ===")
 	current_phase = Phase.ONE
@@ -164,7 +149,6 @@ func _process_phase_one(_delta):
 	if dist < 50 and can_attack:
 		_attack_player()
 
-# ========== PHASE 2: The Fracture ==========
 func _transition_to_phase_two():
 	print("=== PHASE 2: The Fracture ===")
 	current_phase = Phase.TWO
@@ -195,7 +179,6 @@ func _process_phase_two(_delta):
 	if dist < 45 and can_attack:
 		_attack_player()
 
-# ========== PHASE 3: The Null ==========
 func _transition_to_phase_three():
 	print("=== PHASE 3: THE NULL ===")
 	current_phase = Phase.THREE
@@ -228,37 +211,29 @@ func _process_phase_three(_delta):
 	if dist < 45 and can_attack:
 		_attack_player()
 
-# ========== CLONES ==========
 func _spawn_clones():
 	if not is_instance_valid(self):
 		return
 	_clear_clones()
-
 	for i in range(clone_count):
 		var clone = CharacterBody2D.new()
 		clone.name = "AberrationClone_%d" % i
 		clone.global_position = global_position + Vector2(randf_range(-80, 80), randf_range(-60, 60))
 		clone.add_to_group("enemies")
 		clone.add_to_group("aberration_clones")
-
 		var cs = Sprite2D.new()
 		cs.texture = load("res://assets/enemy_iso.png")
 		cs.modulate = Color(0.3, 0.1, 0.4, 0.7)
 		cs.scale = Vector2(2.3, 2.3)
 		clone.add_child(cs)
-
 		var ccol = CollisionShape2D.new()
 		ccol.shape = RectangleShape2D.new()
 		ccol.shape.size = Vector2(40, 40)
 		clone.add_child(ccol)
-
 		clone.set_meta("is_clone", true)
 		clone.set_meta("lifetime", 5.0)
-
-		# Simple AI: follow player slowly
 		var clone_script = GDScript.new()
-		clone_script.source_code = """
-extends CharacterBody2D
+		clone_script.source_code = """extends CharacterBody2D
 var player: Node2D = null
 var lifetime: float = 5.0
 func _ready():
@@ -272,17 +247,15 @@ func _physics_process(delta):
 		var dir = global_position.direction_to(player.global_position)
 		velocity = dir * 50.0
 		move_and_slide()
-func take_damage(amount):
-	# Clones take no damage
+func take_damage(_amount):
 	pass
 func die():
 	queue_free()
 """
+		clone_script.reload()
 		clone.set_script(clone_script)
-
 		get_tree().current_scene.add_child(clone)
 		active_clones.append(clone)
-
 	var next_spawn = randf_range(6.0, 10.0)
 	if current_phase == Phase.TWO:
 		next_spawn = randf_range(5.0, 7.0)
@@ -304,17 +277,13 @@ func _clear_clones():
 			c.queue_free()
 	active_clones.clear()
 
-# ========== GRAVITY SHIFT ==========
 func _shift_gravity():
 	if not is_instance_valid(self) or player == null:
 		return
-
 	gravity_active = true
 	var angles = [0, PI/2, PI, -PI/2, PI/4, -PI/4, 3*PI/4, -3*PI/4]
 	var angle = angles[randi() % angles.size()]
 	gravity_dir = Vector2(cos(angle), sin(angle) * 0.5).normalized()
-
-	# Visual warning
 	var warning = Label.new()
 	warning.text = "⚠ ГРАВИТАЦИЯ ИЗМЕНИЛАСЬ! ⚠"
 	warning.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -323,8 +292,6 @@ func _shift_gravity():
 	warning.add_theme_color_override("font_color", Color(0.8, 0.2, 0.9, 1))
 	warning.add_theme_constant_override("outline_size", 3)
 	add_child(warning)
-
-	# Screen tilt effect via shader or overlay
 	var tilt = Sprite2D.new()
 	tilt.texture = load("res://assets/enemy_iso.png")
 	tilt.modulate = Color(0.5, 0.0, 0.8, 0.15)
@@ -332,14 +299,12 @@ func _shift_gravity():
 	tilt.global_position = player.global_position
 	tilt.z_index = -10
 	get_tree().current_scene.add_child(tilt)
-
 	await get_tree().create_timer(3.0).timeout
 	gravity_active = false
 	if is_instance_valid(warning):
 		warning.queue_free()
 	if is_instance_valid(tilt):
 		tilt.queue_free()
-
 	var next_time = 8.0
 	if current_phase == Phase.TWO:
 		next_time = 5.0
@@ -347,15 +312,12 @@ func _shift_gravity():
 		next_time = 3.5
 	gravity_timer.start(next_time)
 
-# ========== RANDOM MECHANICS ==========
 func _rotate_mechanic():
 	if not is_instance_valid(self):
 		return
-
 	var mechanics = ["flash", "jar", "teleport"]
 	if current_phase == Phase.THREE:
 		mechanics.append("all")
-
 	current_mechanic = mechanics[randi() % mechanics.size()]
 	match current_mechanic:
 		"flash":
@@ -370,7 +332,6 @@ func _rotate_mechanic():
 			_throw_jar()
 			await get_tree().create_timer(0.5).timeout
 			_teleport()
-
 	var next_time = randf_range(5.0, 8.0)
 	if current_phase == Phase.TWO:
 		next_time = randf_range(4.0, 6.0)
@@ -378,17 +339,14 @@ func _rotate_mechanic():
 		next_time = randf_range(3.0, 5.0)
 	mechanic_timer.start(next_time)
 
-# ========== PORTRAITIST FLASH ==========
 func _flash_attack():
 	if not is_instance_valid(self) or player == null:
 		return
 	var dist = global_position.distance_to(player.global_position)
 	if dist < 300:
-		# AoE flash circles
 		for i in range(3):
 			var offset = Vector2(randf_range(-100, 100), randf_range(-80, 80))
 			_create_flash_circle(global_position + offset)
-		# Blind player
 		if player and player.has_method("apply_blind"):
 			player.apply_blind(0.8)
 
@@ -400,25 +358,21 @@ func _create_flash_circle(pos: Vector2):
 	cshape.shape.radius = 50.0
 	circle.add_child(cshape)
 	get_tree().current_scene.add_child(circle)
-
 	var csprite = Sprite2D.new()
 	csprite.texture = load("res://assets/enemy_iso.png")
 	csprite.modulate = Color(1.0, 1.0, 0.8, 0.5)
 	csprite.scale = Vector2(2.0, 2.0)
 	circle.add_child(csprite)
-
 	await get_tree().create_timer(0.3).timeout
 	var bodies = circle.get_overlapping_bodies()
 	for b in bodies:
 		if b.is_in_group("player") and b.has_method("take_damage"):
 			b.take_damage(15)
 			print("Aberration flash hit!")
-
 	var tween = get_tree().create_tween()
 	tween.tween_property(csprite, "modulate:a", 0.0, 0.3)
 	tween.tween_callback(circle.queue_free)
 
-# ========== DEVELOPER JAR ==========
 func _throw_jar():
 	if not is_instance_valid(self) or player == null:
 		return
@@ -439,13 +393,14 @@ func _throw_jar():
 		var dir = global_position.direction_to(player.global_position).rotated(spread)
 		jar.set_meta("jar_velocity", dir * 200.0)
 		jar.set_meta("jar_exploded", false)
+		# FIX: add jar to scene tree BEFORE starting timer
+		get_tree().current_scene.add_child(jar)
 		var timer = Timer.new()
 		timer.one_shot = true
 		timer.wait_time = 3.0
 		timer.timeout.connect(func(): _explode_jar(jar))
 		jar.add_child(timer)
 		timer.start()
-		get_tree().current_scene.add_child(jar)
 
 func _explode_jar(jar):
 	if not is_instance_valid(jar) or jar.get_meta("jar_exploded", false):
@@ -463,7 +418,6 @@ func _explode_jar(jar):
 		if b.is_in_group("player") and b.has_method("take_damage"):
 			b.take_damage(12)
 	splash.queue_free()
-	# Create puddle
 	var puddle = Area2D.new()
 	puddle.global_position = jar.global_position
 	puddle.add_to_group("acid_puddles")
@@ -483,13 +437,10 @@ func _explode_jar(jar):
 	tween.tween_callback(puddle.queue_free)
 	jar.queue_free()
 
-# ========== PHOTOJOURNALIST TELEPORT ==========
 func _teleport():
 	if not is_instance_valid(self) or player == null:
 		return
-	# Flash at current
 	_create_teleport_flash(global_position)
-	# Teleport
 	var angle = randf() * TAU
 	var dist = randf_range(150, 300)
 	global_position = player.global_position + Vector2(cos(angle), sin(angle) * 0.5) * dist
@@ -512,12 +463,10 @@ func _create_teleport_flash(pos: Vector2):
 	tween.tween_property(flash, "modulate:a", 0.0, 0.2)
 	tween.tween_callback(flash.queue_free)
 
-# ========== FRENZY (Phase 3 only) ==========
 func _frenzy_action():
 	if not is_instance_valid(self) or current_phase != Phase.THREE:
 		return
 	print("=== ABERRATION FRENZY ===")
-	# Spawn 2 extra clones
 	for i in range(2):
 		var clone = CharacterBody2D.new()
 		clone.name = "FrenzyClone_%d" % i
@@ -535,8 +484,7 @@ func _frenzy_action():
 		clone.set_meta("is_clone", true)
 		clone.set_meta("lifetime", 3.0)
 		var cscript = GDScript.new()
-		cscript.source_code = """
-extends CharacterBody2D
+		cscript.source_code = """extends CharacterBody2D
 var player: Node2D = null
 var lifetime: float = 3.0
 func _ready():
@@ -550,24 +498,21 @@ func _physics_process(delta):
 		var dir = global_position.direction_to(player.global_position)
 		velocity = dir * 80.0
 		move_and_slide()
-func take_damage(amount):
+func take_damage(_amount):
 	pass
 func die():
 	queue_free()
 """
+		cscript.reload()
 		clone.set_script(cscript)
 		get_tree().current_scene.add_child(clone)
 		active_clones.append(clone)
-
-	# Throw 4 jars
 	for i in range(4):
 		await get_tree().create_timer(0.3).timeout
 		if is_instance_valid(self):
 			_throw_jar()
-
 	frenzy_timer.start(randf_range(8.0, 12.0))
 
-# ========== COMMON ==========
 func _attack_player():
 	can_attack = false
 	if player and player.has_method("take_damage"):
@@ -597,7 +542,8 @@ func die():
 	gravity_active = false
 	GameManager.add_boss_kill()
 	_drop_reward()
-	_show_secret_ending()
+	# FIX: let main.gd handle victory via tree_exited signal
+	# Remove custom ending to avoid conflict with main._game_victory()
 	queue_free()
 
 func _drop_reward():
@@ -616,23 +562,20 @@ func _show_secret_ending():
 	canvas.layer = 300
 	canvas.name = "SecretEnding"
 	get_tree().current_scene.add_child(canvas)
-
 	var bg = ColorRect.new()
 	bg.color = Color(0, 0, 0, 0)
 	bg.size = Vector2(1920, 1080)
-	bg.position = Vector2(-960, -540)
+	bg.position = Vector2.ZERO
 	canvas.add_child(bg)
-
 	var label = Label.new()
 	label.text = "КАДР НОЛЬ\n\nТы запечатлел то, что не должно существовать.\nТеперь оно смотрит на тебя."
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.position = Vector2(-400, -150)
+	label.position = Vector2(560, 390)
 	label.size = Vector2(800, 300)
 	label.add_theme_font_size_override("font_size", 24)
 	label.add_theme_color_override("font_color", Color(0.9, 0.1, 0.3, 1))
 	label.add_theme_constant_override("outline_size", 4)
 	canvas.add_child(label)
-
 	var tween = get_tree().create_tween()
 	tween.tween_property(bg, "color", Color(0, 0, 0, 0.9), 2.0)
 	await get_tree().create_timer(5.0).timeout

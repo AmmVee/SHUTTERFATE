@@ -38,6 +38,12 @@ func open_chest():
 	if sprite:
 		sprite.modulate = Color(0.3, 0.3, 0.3, 0.5)  # Darkened = opened
 
+	# FIX: unlock doors and mark room cleared when chest opened
+	var main = get_tree().get_first_node_in_group("main")
+	if main and main.has_method("unlock_doors"):
+		main.call_deferred("unlock_doors")
+		print("Chest opened: doors unlocked")
+
 	var relic_id = _roll_relic()
 	if relic_id != "":
 		RelicManager.unlock(relic_id)
@@ -126,7 +132,7 @@ func _drop_active_item():
 	var item_data = GameManager.get_active_item_data(item_id)
 	if item_data.is_empty():
 		return
-	
+
 	var added = GameManager.add_active_item_to_hotbar(item_id)
 	if added:
 		print("TREASURE: Active item dropped — ", item_data.name)

@@ -1,17 +1,6 @@
 extends Node
 
-# ========== ACHIEVEMENT SYSTEM ==========
-# All achievements persist across runs
-
-var achievements: Dictionary = {
-		"shutter_fate": {
-			"name": "Судьба затвора",
-			"desc": "Пройдите все 15 этажей и победите Фотографа",
-			"condition": "max_floor >= 15",
-			"reward": "frame_gold"
-		},
-}
-
+var achievements: Dictionary = {}
 var unlocked_achievements: Array[String] = []
 var achievement_progress: Dictionary = {}
 
@@ -158,10 +147,14 @@ func _init_achievements():
 			"desc": "Пройдите этаж 5 с модификатором \"Старый объектив\"",
 			"condition": "old_lens_floor5 == true",
 			"reward": "frame_legendary"
+		},
+		"shutter_fate": {
+			"name": "Судьба затвора",
+			"desc": "Пройдите все 15 этажей и победите Фотографа",
+			"condition": "max_floor >= 15",
+			"reward": "frame_gold"
 		}
 	}
-
-	# Init progress counters
 	achievement_progress = {
 		"shots_fired": 0,
 		"kills": 0,
@@ -239,13 +232,11 @@ func unlock(id: String):
 func _show_popup(name: String, desc: String, reward: String):
 	var popup = CanvasLayer.new()
 	popup.layer = 100
-
 	var panel = ColorRect.new()
 	panel.color = Color(0.05, 0.05, 0.08, 0.95)
 	panel.size = Vector2(500, 120)
 	panel.position = Vector2(710, 50)
 	popup.add_child(panel)
-
 	var title = Label.new()
 	title.text = "ДОСТИЖЕНИЕ РАЗБЛОКИРОВАНО"
 	title.position = Vector2(0, 10)
@@ -254,7 +245,6 @@ func _show_popup(name: String, desc: String, reward: String):
 	title.add_theme_font_size_override("font_size", 14)
 	title.add_theme_color_override("font_color", Color(0.9, 0.85, 0.3, 1))
 	panel.add_child(title)
-
 	var ach_name = Label.new()
 	ach_name.text = name
 	ach_name.position = Vector2(0, 40)
@@ -264,7 +254,6 @@ func _show_popup(name: String, desc: String, reward: String):
 	ach_name.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1))
 	ach_name.add_theme_constant_override("outline_size", 3)
 	panel.add_child(ach_name)
-
 	var ach_desc = Label.new()
 	ach_desc.text = desc
 	ach_desc.position = Vector2(0, 75)
@@ -273,9 +262,13 @@ func _show_popup(name: String, desc: String, reward: String):
 	ach_desc.add_theme_font_size_override("font_size", 12)
 	ach_desc.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
 	panel.add_child(ach_desc)
-
-	get_tree().current_scene.add_child(popup)
-
+	# FIX: use get_tree().root instead of current_scene to avoid null during scene change
+	var root = get_tree().root
+	if root:
+		root.add_child(popup)
+	else:
+		print("WARNING: Cannot show achievement popup — no root available")
+		return
 	var tween = get_tree().create_tween()
 	tween.tween_property(panel, "modulate:a", 0.0, 0.5).set_delay(3.0)
 	tween.chain().tween_callback(func():
@@ -283,7 +276,6 @@ func _show_popup(name: String, desc: String, reward: String):
 			popup.queue_free()
 	)
 
-# Progress setters
 func add_shot():
 	achievement_progress["shots_fired"] += 1
 	check_all()
@@ -336,23 +328,21 @@ func set_no_damage_run(val: bool):
 
 func add_damage_taken(amount: int):
 	achievement_progress["damage_taken_this_run"] += amount
+	achievement_progress["no_damage_run"] = false
 
 func reset_run_damage():
 	achievement_progress["damage_taken_this_run"] = 0
-	achievement_progress["no_damage_run"] = true
+	# FIX: Don't preset no_damage_run = true — it will be evaluated at floor end
 
 func check_no_damage_run():
 	if achievement_progress["damage_taken_this_run"] == 0:
 		achievement_progress["no_damage_run"] = true
-		check_all()
+		unlock("perfectionist")
 
 func check_old_lens_floor5(floor_num: int):
 	if floor_num >= 5 and GameManager.has_pact("old_lens"):
 		achievement_progress["old_lens_floor5"] = true
 		check_all()
-
-
-# ========== SEASONAL ACHIEVEMENT TRACKERS (Stage 8) ==========
 
 func add_seasonal_challenge_complete():
 	achievement_progress["seasonal_challenges_completed"] += 1
@@ -382,7 +372,6 @@ func mark_season_completed(season_id: String):
 	var seasons = achievement_progress.get("seasons_completed", {})
 	if season_id in seasons:
 		seasons[season_id] = true
-	# Check if all seasons completed
 	var all_done = true
 	for s in ["spring", "summer", "autumn", "winter"]:
 		if not seasons.get(s, false):

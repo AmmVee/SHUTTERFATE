@@ -120,20 +120,24 @@ func _shoot_projectile():
 	proj.add_child(pcol)
 
 	var dir = global_position.direction_to(player.global_position)
-	proj.velocity = dir * 220.0
 	proj.set_meta("proj_dir", dir)
 	proj.set_meta("proj_speed", 220.0)
 	proj.set_meta("proj_damage", attack_damage)
 	proj.set_meta("proj_hit", false)
 
+	# FIX: add proj to scene tree BEFORE creating/starting timer
+	get_tree().current_scene.add_child(proj)
+
 	var timer = Timer.new()
 	timer.one_shot = true
 	timer.wait_time = 4.0
-	timer.timeout.connect(func(): if is_instance_valid(proj): proj.queue_free())
+	timer.timeout.connect(func():
+		if is_instance_valid(proj):
+			proj.queue_free()
+	)
 	proj.add_child(timer)
 	timer.start()
 
-	get_tree().current_scene.add_child(proj)
 	# Add projectile movement script
 	var script = GDScript.new()
 	script.source_code = """extends CharacterBody2D
@@ -254,10 +258,9 @@ func spawn_blood():
 		blood.position = global_position + Vector2(cos(angle), sin(angle)) * dist - blood.size * 0.5
 		blood.z_index = 50
 		get_tree().current_scene.add_child(blood)
-		
+
 		var tween = get_tree().create_tween()
 		tween.set_parallel(true)
 		tween.tween_property(blood, "modulate:a", 0.0, 0.4 + randf() * 0.3)
 		tween.tween_property(blood, "position:y", blood.position.y + randf_range(10, 25), 0.4)
 		tween.chain().tween_callback(func(): blood.queue_free())
-

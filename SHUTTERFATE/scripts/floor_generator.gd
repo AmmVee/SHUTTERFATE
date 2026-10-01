@@ -16,6 +16,7 @@ const ROOM_PUZZLE = "puzzle"
 const ROOM_REST = "rest"
 const ROOM_MINIBOSS = "miniboss"
 const ROOM_GALLERY = "gallery"
+const ROOM_SHOP = "shop"
 
 func _ready():
 	generate_floor()
@@ -32,6 +33,7 @@ func _get_room_color(room_type: String) -> Color:
 		ROOM_REST: return Color(0.3, 1.0, 0.5, 0.5)
 		ROOM_MINIBOSS: return Color(1.0, 0.4, 0.6, 0.5)
 		ROOM_GALLERY: return Color(0.8, 0.4, 1.0, 0.5)
+		ROOM_SHOP: return Color(0.2, 0.9, 0.6, 0.5)
 		_: return Color(1.0, 1.0, 1.0, 0.5)
 
 func generate_floor():
@@ -85,9 +87,11 @@ func generate_floor():
 				rtype = ROOM_REST
 			elif rtype_roll < 0.60:
 				rtype = ROOM_MINIBOSS
-			elif rtype_roll < 0.75:
+			elif rtype_roll < 0.70:
 				rtype = ROOM_GALLERY
-			elif rtype_roll < 0.88:
+			elif rtype_roll < 0.82:
+				rtype = ROOM_SHOP
+			elif rtype_roll < 0.92:
 				rtype = ROOM_TREASURE
 			else:
 				rtype = ROOM_ELITE

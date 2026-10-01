@@ -10,6 +10,10 @@ func _ready():
 
 func _input(event):
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		# FIX (ЭТАП 8): не открывать меню паузы поверх открытых панелей (магазин в подземелье)
+		var main = get_tree().get_first_node_in_group("main")
+		if main != null and main.get("dungeon_shop_panel_open"):
+			return
 		toggle_pause()
 
 func _on_settings():

@@ -429,6 +429,8 @@ func _on_confirm_pacts():
 var upgrade_panel_open: bool = false
 var shop_panel_open: bool = false
 var npc_menu_open: bool = false
+var film_selector_visible: bool = false
+var relic_ui_visible: bool = false
 
 func _on_achievements():
 	close_all_panels()
@@ -832,7 +834,7 @@ func create_npc_menu():
 
 	var btn_ach = Button.new()
 	btn_ach.text = "ДОСТИЖЕНИЯ"
-	btn_ach.position = Vector2(btn_x, btn_y + 100)
+	btn_ach.position = Vector2(btn_x, btn_y + 160)
 	btn_ach.size = Vector2(btn_w, btn_h)
 	btn_ach.add_theme_font_size_override("font_size", 16)
 	btn_ach.add_theme_color_override("font_color", Color(0.9, 0.7, 0.2, 1))
@@ -841,7 +843,7 @@ func create_npc_menu():
 
 	var btn_seasonal = Button.new()
 	btn_seasonal.text = "СЕЗОННОЕ ИСПЫТАНИЕ"
-	btn_seasonal.position = Vector2(btn_x, btn_y + 150)
+	btn_seasonal.position = Vector2(btn_x, btn_y + 210)
 	btn_seasonal.size = Vector2(btn_w, btn_h)
 	btn_seasonal.add_theme_font_size_override("font_size", 16)
 	btn_seasonal.add_theme_color_override("font_color", SeasonManager.get_season_color())
@@ -850,7 +852,7 @@ func create_npc_menu():
 
 	var btn_daily = Button.new()
 	btn_daily.text = "ЕЖЕДНЕВНОЕ ИСПЫТАНИЕ"
-	btn_daily.position = Vector2(btn_x, btn_y + 200)
+	btn_daily.position = Vector2(btn_x, btn_y + 260)
 	btn_daily.size = Vector2(btn_w, btn_h)
 	btn_daily.add_theme_font_size_override("font_size", 16)
 	btn_daily.add_theme_color_override("font_color", Color(0.3, 0.8, 0.9, 1))
@@ -859,7 +861,7 @@ func create_npc_menu():
 
 	var btn_gallery = Button.new()
 	btn_gallery.text = "ГАЛЕРЕЯ (%d)" % GameManager.photo_gallery.size()
-	btn_gallery.position = Vector2(btn_x, btn_y + 250)
+	btn_gallery.position = Vector2(btn_x, btn_y + 310)
 	btn_gallery.size = Vector2(btn_w, btn_h)
 	btn_gallery.add_theme_font_size_override("font_size", 16)
 	btn_gallery.add_theme_color_override("font_color", Color(0.9, 0.5, 0.8, 1))
@@ -868,7 +870,7 @@ func create_npc_menu():
 
 	var btn_coop = Button.new()
 	btn_coop.text = "КООПЕРАТИВ: %s" % ("ВКЛ" if GameManager.coop_mode else "ВЫКЛ")
-	btn_coop.position = Vector2(btn_x, btn_y + 300)
+	btn_coop.position = Vector2(btn_x, btn_y + 360)
 	btn_coop.size = Vector2(btn_w, btn_h)
 	btn_coop.add_theme_font_size_override("font_size", 16)
 	btn_coop.add_theme_color_override("font_color", Color(0.3, 0.9, 0.6, 1) if GameManager.coop_mode else Color(0.5, 0.5, 0.5, 1))
@@ -877,7 +879,7 @@ func create_npc_menu():
 
 	var btn_settings = Button.new()
 	btn_settings.text = "НАСТРОЙКИ"
-	btn_settings.position = Vector2(btn_x, btn_y + 350)
+	btn_settings.position = Vector2(btn_x, btn_y + 410)
 	btn_settings.size = Vector2(btn_w, btn_h)
 	btn_settings.add_theme_font_size_override("font_size", 16)
 	btn_settings.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0, 1))
@@ -886,7 +888,7 @@ func create_npc_menu():
 
 	var btn_close = Button.new()
 	btn_close.text = "УЙТИ"
-	btn_close.position = Vector2(btn_x, btn_y + 420)
+	btn_close.position = Vector2(btn_x, btn_y + 480)
 	btn_close.size = Vector2(btn_w, btn_h)
 	btn_close.add_theme_font_size_override("font_size", 16)
 	btn_close.add_theme_color_override("font_color", Color(0.8, 0.3, 0.3, 1))
@@ -900,6 +902,10 @@ func close_all_panels():
 			var n = child.name
 			if n == "NPCMenuPanel" or n == "ShopPanel" or n == "UpgradePanel" or n == "PactPanel" or n == "DailyChallengePanel" or n == "SeasonalChallengePanel" or n == "AchievementsPanel" or n == "SettingsMenu" or n == "PhotoEditor" or n == "NPCDialoguePanel" or n == "GardenerPanel" or n == "DecoratorPanel" or n.begins_with("Film") or n.begins_with("Relic"):
 				child.queue_free()
+		# FIX (ЭТАП 8): FilmSelector и RelicUI больше не остаются на экране
+		# при открытии магазина/меню NPC через close_all_panels()
+		film_selector_visible = false
+		relic_ui_visible = false
 	# Also clean up any PhotoEditor at root (legacy)
 	var pe = get_node_or_null("PhotoEditor")
 	if pe:
@@ -908,6 +914,14 @@ func close_all_panels():
 	shop_panel_open = false
 	upgrade_panel_open = false
 	pact_selector_open = false
+
+func _restore_hub_panels():
+	# FIX (ЭТАП 8): возвращаем селектор плёнок и UI реликвий после закрытия панелей
+	if not npc_menu_open and not shop_panel_open and not upgrade_panel_open and not pact_selector_open:
+		if not film_selector_visible:
+			create_film_selector()
+		if not relic_ui_visible:
+			create_relic_ui()
 
 func close_npc_menu():
 	close_all_panels()
@@ -1198,6 +1212,9 @@ func create_film_selector():
 		if child.name.begins_with("FilmBtn") or child.name == "FilmTitle" or child.name == "FilmSelector" or child.name.begins_with("FilmDesc") or child.name.begins_with("FilmRarity"):
 			child.queue_free()
 
+	# FIX (ЭТАП 8): селектор плёнок — панель, скрываемая при открытии других панелей
+	film_selector_visible = true
+
 	var title = Label.new()
 	title.name = "FilmTitle"
 	title.text = "ВЫБЕРИТЕ ПЛЁНКУ"
@@ -1291,6 +1308,9 @@ func create_relic_ui():
 	for child in canvas.get_children():
 		if child.name.begins_with("Relic") or child.name == "RelicScroll":
 			child.free()
+
+	# FIX (ЭТАП 8): UI реликвий — панель, скрываемая при открытии других панелей
+	relic_ui_visible = true
 
 	var scroll = ScrollContainer.new()
 	scroll.name = "RelicScroll"

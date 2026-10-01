@@ -133,21 +133,23 @@ func enter_current_room():
 			spawn_miniboss_room(room)
 		"gallery":
 			spawn_gallery_room(room)
+		"shop":
+			spawn_shop_room(room)
 		_:
 			var visits = room_data.get("visits", 0)
-			visits += 1
-			room_data["visits"] = visits
-			room_data["cleared"] = false
-			print("Room visits: ", visits)
-			if randf() < 0.08:
-				spawn_npc_encounter(room)
-			var enemy_count = 3 + int(GameManager.current_floor * 1.5)
-			if room_type == "elite":
-				enemy_count += 3
-			enemy_count = min(enemy_count, 15)
-			print("Spawning ", enemy_count, " enemies (visit #", visits, ")")
-			for i in range(enemy_count):
-				spawn_enemy_in_room(room, visits)
+			if not room_data.get("cleared", false):
+				visits += 1
+				room_data["visits"] = visits
+				print("Room visits: ", visits)
+				if randf() < 0.08:
+					spawn_npc_encounter(room)
+				var enemy_count = 3 + int(GameManager.current_floor * 1.5)
+				if room_type == "elite":
+					enemy_count += 3
+				enemy_count = min(enemy_count, 15)
+				print("Spawning ", enemy_count, " enemies (visit #", visits, ")")
+				for i in range(enemy_count):
+					spawn_enemy_in_room(room, visits)
 	var connections = room_data.get("connections", {})
 	print("Connections: ", connections.keys())
 	for dir_name in connections.keys():
@@ -162,6 +164,9 @@ func enter_current_room():
 		room_data["cleared"] = true
 		unlock_doors()
 	if room_type == "start":
+		room_data["cleared"] = true
+		unlock_doors()
+	if room_type == "shop":
 		room_data["cleared"] = true
 		unlock_doors()
 
@@ -829,6 +834,12 @@ func _process(delta):
 		if child.name.begins_with("NPCEncounter_") and child.get_meta("player_near", false):
 			if Input.is_action_just_pressed("ui_accept") or Input.is_key_pressed(KEY_E):
 				_interact_npc_encounter(child)
+	if dungeon_shop_panel_open:
+		return
+	for child in get_children():
+		if child.name == "ShopStall" and child.get_meta("player_near", false):
+			if Input.is_action_just_pressed("ui_accept") or Input.is_key_pressed(KEY_E):
+				_open_dungeon_shop()
 
 func _deactivate_trap_room(terminal):
 	terminal.set_meta("deactivated", true)
@@ -944,6 +955,176 @@ func spawn_gallery_room(room):
 	enemies_alive += 1
 	chest.tree_exited.connect(_on_enemy_died)
 	print("Gallery chest spawned")
+
+# ========== ЭТАП 4: КОМНАТА МАГАЗИНА В ПОДЗЕМЕЛЬЕ ==========
+var dungeon_shop_panel_open: bool = false
+
+func spawn_shop_room(room):
+	print("SHOP ROOM")
+	if room == null:
+		return
+	var room_data = floor_gen.get_current_room_data()
+	# Генерируем товар один раз — при первом заходе в комнату
+	if not room_data.get("shop_generated", false):
+		room_data["shop_generated"] = true
+		GameManager.regenerate_shop()
+	# Стеллаж торговца (визуальный якорь комнаты)
+	var stall = Area2D.new()
+	stall.name = "ShopStall"
+	var pos = room.global_position + room.get_center()
+	if room.has_method("is_position_inside_floor") and not room.is_position_inside_floor(pos):
+		pos = room.global_position + room.get_random_floor_position(3)
+	stall.global_position = pos
+	var sprite = Sprite2D.new()
+	sprite.name = "Sprite2D"
+	sprite.texture = load("res://assets/floor_iso.png")
+	sprite.modulate = Color(0.2, 0.9, 0.6, 1.0)
+	sprite.scale = Vector2(1.4, 1.4)
+	stall.add_child(sprite)
+	var coll = CollisionShape2D.new()
+	coll.shape = RectangleShape2D.new()
+	coll.shape.size = Vector2(60, 60)
+	stall.add_child(coll)
+	var label = Label.new()
+	label.name = "Label"
+	label.text = "[E] Торговец"
+	label.position = Vector2(-50, -55)
+	label.add_theme_font_size_override("font_size", 12)
+	label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.7, 1))
+	label.add_theme_constant_override("outline_size", 2)
+	stall.add_child(label)
+	stall.body_entered.connect(_on_shop_stall_entered.bind(stall))
+	stall.body_exited.connect(_on_shop_stall_exited.bind(stall))
+	add_child(stall)
+	print("Shop stall spawned, inventory: ", GameManager.shop_inventory.size())
+
+func _on_shop_stall_entered(body, stall):
+	if not body.is_in_group("player"):
+		return
+	var label = stall.get_node_or_null("Label")
+	if label:
+		label.visible = true
+	stall.set_meta("player_near", true)
+
+func _on_shop_stall_exited(body, stall):
+	if not body.is_in_group("player"):
+		return
+	var label = stall.get_node_or_null("Label")
+	if label:
+		label.visible = false
+	stall.set_meta("player_near", false)
+
+func _open_dungeon_shop():
+	if dungeon_shop_panel_open:
+		return
+	dungeon_shop_panel_open = true
+	get_tree().paused = true
+	var canvas = get_node_or_null("DungeonShopCanvas")
+	if canvas == null:
+		canvas = CanvasLayer.new()
+		canvas.name = "DungeonShopCanvas"
+		canvas.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(canvas)
+	var panel = ColorRect.new()
+	panel.name = "DungeonShopPanel"
+	panel.color = Color(0.05, 0.05, 0.08, 0.95)
+	panel.position = Vector2(460, 160)
+	panel.size = Vector2(1000, 720)
+	canvas.add_child(panel)
+
+	var title = Label.new()
+	title.text = "ДОРОЖНЫЙ ТОРГОВЕЦ"
+	title.position = Vector2(0, 20)
+	title.size = Vector2(1000, 50)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", Color(0.3, 1.0, 0.7, 1))
+	title.add_theme_constant_override("outline_size", 4)
+	panel.add_child(title)
+
+	var prints = Label.new()
+	prints.name = "PrintsLabel"
+	prints.text = "Отпечатки: %d" % GameManager.photo_prints
+	prints.position = Vector2(0, 70)
+	prints.size = Vector2(1000, 30)
+	prints.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prints.add_theme_font_size_override("font_size", 18)
+	prints.add_theme_color_override("font_color", Color(0.8, 0.8, 0.6, 1))
+	panel.add_child(prints)
+
+	var start_x = 120
+	var gap = 300
+	for i in range(3):
+		var slot_x = start_x + i * gap
+		if i < GameManager.shop_inventory.size():
+			var id = GameManager.shop_inventory[i]
+			var relic = RelicManager.get_relic(id)
+			if relic == null:
+				continue
+			var price = GameManager.get_relic_price(relic.rarity)
+			var btn = Button.new()
+			btn.name = "DungeonShopSlot_%d" % i
+			btn.position = Vector2(slot_x, 150)
+			btn.size = Vector2(260, 400)
+			btn.add_theme_font_size_override("font_size", 13)
+			btn.text = "%s\n\n%s\n\nРедкость: %s\nЦена: %d" % [
+				relic.display_name, relic.description, relic.rarity, price
+			]
+			if GameManager.photo_prints >= price:
+				btn.add_theme_color_override("font_color", relic.rarity_color)
+				btn.pressed.connect(_on_dungeon_buy_relic.bind(i))
+			else:
+				btn.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4, 1))
+				btn.disabled = true
+			panel.add_child(btn)
+		else:
+			var empty = Label.new()
+			empty.text = "ПУСТО"
+			empty.position = Vector2(slot_x + 80, 300)
+			empty.size = Vector2(100, 30)
+			empty.add_theme_font_size_override("font_size", 14)
+			empty.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4, 1))
+			panel.add_child(empty)
+
+	var regen = Button.new()
+	regen.name = "DungeonShopRegen"
+	regen.text = "ОБНОВИТЬ АССОРТИМЕНТ (100 отпечатков)"
+	regen.position = Vector2(250, 590)
+	regen.size = Vector2(500, 40)
+	regen.add_theme_font_size_override("font_size", 14)
+	regen.pressed.connect(_on_dungeon_regen_shop)
+	panel.add_child(regen)
+
+	var close_btn = Button.new()
+	close_btn.text = "ЗАКРЫТЬ"
+	close_btn.position = Vector2(350, 650)
+	close_btn.size = Vector2(300, 40)
+	close_btn.add_theme_font_size_override("font_size", 16)
+	close_btn.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3, 1))
+	close_btn.pressed.connect(_close_dungeon_shop)
+	panel.add_child(close_btn)
+
+func _refresh_dungeon_shop():
+	_close_dungeon_shop()
+	_open_dungeon_shop()
+
+func _on_dungeon_buy_relic(index: int):
+	if GameManager.buy_relic_from_shop(index):
+		print("Bought relic from dungeon shop")
+		_refresh_dungeon_shop()
+
+func _on_dungeon_regen_shop():
+	if GameManager.can_afford(100):
+		GameManager.spend_prints(100)
+		GameManager.regenerate_shop()
+		_refresh_dungeon_shop()
+
+func _close_dungeon_shop():
+	dungeon_shop_panel_open = false
+	get_tree().paused = false
+	var canvas = get_node_or_null("DungeonShopCanvas")
+	if canvas != null:
+		canvas.queue_free()
 
 
 func _clamp_enemies_to_rooms():
